@@ -27,6 +27,12 @@ If you want to directly run the image using `QEMU`, you can pass an argument:
 ./build.sh --run
 ```
 
+You can also debug the kernel running inside `QEMU` through an automatically launched `GDB` instance using:
+
+```(bash)
+./build.sh --debug
+```
+
 If you want to flash the image onto a USB drive (to run the image on real hardware), use:
 
 ```(bash)
