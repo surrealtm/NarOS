@@ -5,6 +5,7 @@ set -e
 #
 # Set up common variables
 #
+INCLUDE_DIR=include/
 SOURCE_DIR=src/
 BUILD_DIR=build/
 IMAGE_NAME=naros.bin
@@ -22,8 +23,8 @@ mkdir -p ${BUILD_DIR}
 #
 # Build the kernel
 #
-KERNEL_DIR=${SOURCE_DIR}/kernel/
-COMPILER_OPTIONS="-m32 -ffreestanding -fno-pie -fno-pic -c -O3"
+KERNEL_DIR=${SOURCE_DIR}kernel/
+COMPILER_OPTIONS="-m32 -ffreestanding -fno-pie -fno-pic -c -O3 -I${INCLUDE_DIR}"
 LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 --oformat binary -e kernel_entry_point"
 nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
 gcc ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -o ${BUILD_DIR}kernel.o

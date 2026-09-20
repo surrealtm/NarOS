@@ -1,19 +1,22 @@
+#include "display.h"
+
+#include "display.c"
+
 static
-void print_string(const unsigned int row, const char *string) {
-    const char color = 0x0f;
-    char *video_memory = (char *) 0xb8000;
-    unsigned int idx = row * 80 * 2;
-    while(*string) {
-        video_memory[idx++] = *string;
-        video_memory[idx++] = color;
-        ++string;
+void clear_screen() {
+    int width, height;
+    os_display_get_resolution(&width, &height);
+    for(int y = 0; y < height; ++y) {
+        for(int x = 0; x < width; ++x) {
+            os_display_set_character(x, y, 'X', 0x0f);
+        }
     }
 }
 
 // This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
 // the kernel.
 int kernel_entry_point(void) {
-    print_string(5, "Hello from the kernel!");
+    clear_screen();
     while(true) {}
     return 0;
 }
