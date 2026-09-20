@@ -1,10 +1,52 @@
 [bits 16]
 [org 0x7c00]
 
-;
+; Jump over the FAT BPB
+jmp short boot_start
+nop
+
+; ------------------------------------------------
+; FAT12/16 BIOS PARAMETER BLOCK
+; ------------------------------------------------
+
+db "NAROS   " ; OEM name, exactly 8 bytes
+dw 512;       ; Bytes per sector
+db 1          ; Sectors per cluster
+dw 10         ; Reserved sectors
+db 2          ; Number of FATs
+dw 224        ; Root directory of entries
+dw 2880       ; Total sectors, 1.44 MiB
+db 0xf0       ; Removable-media descriptor
+dw 9          ; Sectors per FAT
+dw 18         ; Sectors per track
+dw 2          ; Number of heads
+dd 0          ; Hidden sectors
+dd 0          ; Large total-sector count
+
+; ------------------------------------------------
+; FAT12/16 EXTENDED BPB
+; ------------------------------------------------
+
+db 0x00          ; Bios drive number
+db 0x00          ; Reserved
+db 0x29          ; Extended boot signature
+dd 0x20260920    ; Arbitrary volume serial number
+db "NAROS      " ; Volume label, exactly 11 bytes
+db "FAT12   "    ; Filesystem name, exactly 8 bytes
+
+boot_start:
+    ; Normalize CS if firmware entered as 07c0:0000
+    jmp 0x0000:entry_point
+
+; Verify the size of the BPB
+%if (boot_start - $$) != 0x3e
+    %error "Boot code must start at byte 0x3e - the BPB was expected to take this much space."
+%endif
+
+; ------------------------------------------------
 ; Entry Point
-;
-start:
+; ------------------------------------------------
+entry_point:
     ; INT instructions use the stack to save FLAGS, CS and IP.
     cli
     cld
