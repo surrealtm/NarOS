@@ -62,6 +62,7 @@ entry_point:
 
     call load_kernel_from_disk
     call invoke_kernel
+    // @Incomplete: Print a message when the kernel has exited?
     call halt
 
 ;
