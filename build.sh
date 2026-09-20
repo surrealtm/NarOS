@@ -44,5 +44,5 @@ cat ${BUILD_DIR}boot_loader.bin ${BUILD_DIR}kernel.bin >${BUILD_DIR}${IMAGE_NAME
 # Run the final image using qemu
 #
 if [[ ${RUN_QEMU} == true ]]; then
-    qemu-system-i386 -fda ${BUILD_DIR}${IMAGE_NAME}
+    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME}
 fi
