@@ -61,7 +61,7 @@ entry_point:
     call print_string
 
     call load_kernel_from_disk
-
+    call invoke_kernel
     call halt
 
 ;
@@ -119,8 +119,67 @@ load_kernel_from_disk:
     call halt
 
 ;
+; Declare code and data segments when in 32 bit mode
+;
+gdt_start:
+    dq 0x0
+
+gdt_code:
+    dw 0xffff    ; Segment length, bits 0-15
+    dw 0x0       ; Segment base, bits 0-15
+    db 0x0       ; Segment base, bits 16-23
+    db 10011010b ; Flags (8 bits)
+    db 11001111b ; Flags (4 bits) + Segment length, bits 16-19
+    db 0x0       ; Segment Base, bits 24-31
+
+gdt_data:
+    dw 0xffff    ; Segment length, bits 0-15
+    dw 0x0       ; Segment base, bits 0-15
+    db 0x0       ; Segment base, bits 16-23
+    db 10010010b ; Flags (8 bits)
+    db 11001111b ; Flags (4 bits) + Segment length, bits 16-19
+    db 0x0       ; Segment base, bits 24-31
+
+gdt_end:
+
+gdt_descriptor:
+    dw gdt_end - gdt_start - 1 ; Size (16 bit)
+    dd gdt_start ; Address (32 bit)
+
+CODE_SEGMENT equ gdt_code - gdt_start
+DATA_SEGMENT equ gdt_data - gdt_start
+
+;
+; Implement switching to 32 bit mode
+;
+
+invoke_kernel:
+    cli
+    lgdt [gdt_descriptor]
+    ; Enable protected mode
+    mov eax, cr0
+    or eax, 0x1
+    mov cr0, eax
+    jmp CODE_SEGMENT:.init_32bit
+
+[bits 32]
+.init_32bit:
+    ; Update segment registers to point at the allocated segments
+    mov ax, DATA_SEGMENT
+    mov ds, ax
+    mov ss, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+.call_kernel_entry_point:
+    mov ebp, 0x90000 ; Set up the stack pointer
+    mov esp, ebp
+    call KERNEL_OFFSET
+
+;
 ; Declare data
 ;
+[bits 16]
 KERNEL_OFFSET equ 0x1000
 KERNEL_SECTOR_COUNT equ 0x9
 INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
