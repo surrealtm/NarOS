@@ -175,6 +175,7 @@ invoke_kernel:
     mov ebp, 0x90000 ; Set up the stack pointer
     mov esp, ebp
     call KERNEL_OFFSET
+    ret
 
 ;
 ; Declare data
