@@ -4,10 +4,8 @@
 #define DISPLAY_WIDTH 80
 #define DISPLAY_HEIGHT 25
 
-static inline
-char *video_memory() {
-    return (char *) 0xb8000;
-}
+// This memory address is hardcoded by the VGA video format
+static volatile char * const video_memory = (char *) 0xb8000;
 
 void os_display_get_resolution(int *width, int *height) {
     *width = DISPLAY_WIDTH;
@@ -20,7 +18,6 @@ void os_display_set_character(int x, int y, char character, char color) {
     }
 
     unsigned int idx = (y * DISPLAY_WIDTH + x) * 2;
-    char *memory = video_memory();
-    memory[idx++] = character;
-    memory[idx++] = color;
+    video_memory[idx++] = character;
+    video_memory[idx++] = color;
 }
