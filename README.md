@@ -35,3 +35,4 @@ If you want to flash the image onto a USB drive (to run the image on real hardwa
 ```
 
 The `flash_to_disk` script will query which block device you want to flash the image to.
+**Note**: The drive is expected to be using the `FAT` formatting.
