@@ -1,24 +1,30 @@
 [extern interrupt_handler]
-[global interrupt_0]
-[global interrupt_1]
-[global interrupt_2]
+[global interrupt_00]
+[global interrupt_0e]
+[global interrupt_20]
 
-interrupt_0:
+; The interrupt procedures are installed by the kernel into the Interrupt Descriptor Table.
+; When an exception / interrupt occurs, these assembly procedures are invoked by the CPU.
+; We then construct a `Interrupt_Register_State` struct on the stack in assembly, and call the
+; `interrupt_handler` procedure with a pointer to the state as an argument.
+; The `interrupt_handler` then has access to the interrupt signal, as well as all the registers.
+
+interrupt_00:
     cli
     push byte 0
-    push byte 0
+    push byte 0x00
     jmp interrupt_dispatch
 
-interrupt_1:
+interrupt_0e:
     cli
     push byte 0
-    push byte 14
+    push byte 0x0e
     jmp interrupt_dispatch
 
-interrupt_2:
+interrupt_20:
     cli
     push byte 0
-    push byte 32
+    push byte 0x20
     jmp interrupt_dispatch
 
 interrupt_dispatch:
