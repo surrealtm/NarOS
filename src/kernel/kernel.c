@@ -1,20 +1,24 @@
 //
-// Kernel Header Files
+// Public Header Files
 //
 #include "core.h"
 #include "display.h"
 
 //
+// Internal Header Files
+//
+#include "common.h"
+#include "interrupt.h"
+
+//
 // Kernel Source Files
 //
+#include "interrupt.c"
+#include "core.c"
 #include "display.c"
 
-
-//
-// This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
-// the kernel.
-//
-int kernel_entry_point(void) {
+static
+void app(void) {
     s32 index = 0;
     s32 width, height;
     os_display_get_resolution(&width, &height);
@@ -28,8 +32,18 @@ int kernel_entry_point(void) {
             }
         }
 
+        os_ctrl_sleep(16000000);
+
         ++index;
     }
+}
 
+//
+// This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
+// the kernel.
+//
+int kernel_entry_point(void) {
+    initialize_timer();
+    app();
     return 0;
 }

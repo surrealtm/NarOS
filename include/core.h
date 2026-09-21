@@ -27,3 +27,5 @@ STATIC_ASSERT(sizeof(u8)  == 1 && sizeof(s8)  == 1);
 STATIC_ASSERT(sizeof(f64) == 8);
 STATIC_ASSERT(sizeof(f32) == 4);
 STATIC_ASSERT(sizeof(b8)  == 1);
+
+void set_memory(void *dst, u8 value, u32 size_in_bytes);
