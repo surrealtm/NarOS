@@ -16,25 +16,34 @@ DEBUG_QEMU=false
 CHECK_HEADERS=false
 C_COMPILER="gcc"
 
-if [[ "${1:-}" == "--run" ]]; then
-    RUN_QEMU=true
-fi
+for ARGUMENT in "$@"; do
+    case "${ARGUMENT}" in
+    --run)
+        RUN_QEMU=true
+        ;;
 
-if [[ "${1:-}" == "--debug" ]]; then
-    DEBUG_QEMU=true
-fi
+    --debug)
+        DEBUG_QEMU=true
+        ;;
 
-if [[ "${1:-}" == "--check-headers" ]]; then
-    CHECK_HEADERS=true
-fi
+    --check-headers)
+        CHECK_HEADERS=true
+        ;;
 
-if [[ "${1:-}" == "--gcc" ]]; then
-    C_COMPILER="gcc"
-fi
+    --gcc)
+        C_COMPILER="gcc"
+        ;;
 
-if [[ "${1:-}" == "--clang" ]]; then
-    C_COMPILER="clang"
-fi
+    --clang)
+        C_COMPILER="clang"
+        ;;
+
+    *)
+        echo " -- Unknown Build Argument ${ARGUMENT}" >&2
+        exit 1
+        ;;
+    esac
+done
 
 #
 # Log the build type
@@ -58,7 +67,7 @@ mkdir -p ${BUILD_DIR}
 # Build the kernel
 #
 KERNEL_DIR=${SOURCE_DIR}kernel/
-COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -c -I${INCLUDE_DIR}"
+COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -I${INCLUDE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -Og"
 else
@@ -69,7 +78,7 @@ LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 
 nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
-${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -o ${BUILD_DIR}kernel.o
+${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -c -o ${BUILD_DIR}kernel.o
 ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
