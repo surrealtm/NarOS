@@ -1,19 +1,34 @@
-static
-void print_string(const unsigned int row, const char *string) {
-    const char color = 0x0f;
-    char *video_memory = (char *) 0xb8000;
-    unsigned int idx = row * 80 * 2;
-    while(*string) {
-        video_memory[idx++] = *string;
-        video_memory[idx++] = color;
-        ++string;
-    }
-}
+//
+// Kernel Header Files
+//
+#include "display.h"
 
+//
+// Kernel Source Files
+//
+#include "display.c"
+
+
+//
 // This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
 // the kernel.
+//
 int kernel_entry_point(void) {
-    print_string(5, "Hello from the kernel!");
-    while(true) {}
+    s32 index = 0;
+    s32 width, height;
+    os_display_get_resolution(&width, &height);
+    while(true) {
+        os_display_clear(' ', OS_DISPLAY_White);
+
+        for(int y = 0; y < height; ++y) {
+            for(int x = 0; x < width; ++x) {
+                const b8 is_cell = (y * width + x) == index;
+                os_display_set_character(x, y, is_cell ? 'X' : '.', is_cell ? OS_DISPLAY_White : OS_DISPLAY_Red);
+            }
+        }
+
+        ++index;
+    }
+
     return 0;
 }
