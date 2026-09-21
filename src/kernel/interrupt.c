@@ -51,8 +51,8 @@ void remap_interrupt_handlers() {
 }
 
 extern
-void interrupt_handler(const Interrupt_Register_State *state) {
-    if(interrupt_callbacks[state->signal]) {
+void interrupt_handler(const volatile Interrupt_Register_State *state) {
+    if(state->signal < ARRAY_COUNT(interrupt_callbacks) && interrupt_callbacks[state->signal]) {
         interrupt_callbacks[state->signal]();
     }
 
@@ -79,12 +79,18 @@ void initialize_interrupt_handlers(void) {
     const u8 flags = 0x8e;
     remap_interrupt_handlers();
     install_interrupt_descriptor(0x00, (u32) interrupt_00, segment, flags);
-    install_interrupt_descriptor(0x0e, (u32) interrupt_0e, segment, flags);
+    // @Incomplete: Register a dummy signal for all unused interrupts, so that the CPU can call a valid address at least...
+    for(s16 s = 0x01; s < (s16) ARRAY_COUNT(interrupt_descriptor_table); ++s) {
+        install_interrupt_descriptor(s, (u32) interrupt_0e, segment, flags);
+    }
     install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
     __asm__ volatile ("lidt %0" :: "m"(interrupt_descriptor_table_pointer));
     __asm__ volatile ("sti");
 }
 
-void register_interrupt_callback(u8 signal, Interrupt_Callback callback) {
+void register_interrupt_callback(Interrupt_Signal signal, Interrupt_Callback callback) {
+    if(signal < 0 || signal >= ARRAY_COUNT(interrupt_callbacks)) {
+        return;
+    }
     interrupt_callbacks[signal] = callback;
 }

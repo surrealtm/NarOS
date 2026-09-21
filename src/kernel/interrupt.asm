@@ -47,6 +47,7 @@ interrupt_dispatch:
     pop es
     pop ds
     popa
+    add esp, 8
     sti
     iret
 

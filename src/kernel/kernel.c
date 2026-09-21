@@ -17,24 +17,60 @@
 #include "core.c"
 #include "display.c"
 
+volatile u32 idx = 0;
+volatile u32 seconds_passed = 0;
+
+static
+void timer_handle() {
+    ++idx;
+    if(idx % 100 == 0) {
+        ++seconds_passed;
+    }
+}
+
+static
+u32 print_string(const u32 x, const u32 y, const char *text) {
+    u32 cursor = x;
+    while(*text) {
+        os_display_set_character(cursor, y, *text, OS_DISPLAY_White);
+        ++cursor;
+        ++text;
+    }
+
+    return cursor;
+}
+
 static
 void app(void) {
-    s32 index = 0;
     s32 width, height;
     os_display_get_resolution(&width, &height);
-    while(true) {
-        os_display_clear(' ', OS_DISPLAY_White);
 
-        for(int y = 0; y < height; ++y) {
-            for(int x = 0; x < width; ++x) {
-                const b8 is_cell = (y * width + x) == index;
-                // @Temporary
-                if(5 / x)
-                    os_display_set_character(x, y, is_cell ? 'X' : '.', is_cell ? OS_DISPLAY_White : OS_DISPLAY_Red);
+    while(true) {
+        const u32 seconds_started = seconds_passed;
+        while(seconds_started == seconds_passed) {};
+
+        os_display_clear(' ', OS_DISPLAY_White);
+        const u32 cursor = print_string(0, 0, "Seconds passed: ");
+
+        u32 power = 1;
+
+        {
+            u32 value = seconds_passed;
+            while(value > 0) {
+                value /= 10;
+                ++power;
             }
         }
 
-        ++index;
+        {
+            u32 value = seconds_passed;
+            u32 index = 0;
+            while(value > 0) {
+                os_display_set_character(cursor + power - index, 0, value % 10 + '0', OS_DISPLAY_Cyan);
+                value /= 10;
+                ++index;
+            }
+        }
     }
 }
 
@@ -44,6 +80,13 @@ void app(void) {
 //
 int kernel_entry_point(void) {
     initialize_interrupt_handlers();
+
+    int divisor = 1193180 / 100;
+    write_output_port(0x43, 0x36);
+    write_output_port(0x40, divisor & 0xff);
+    write_output_port(0x40, divisor >> 8);
+
+    register_interrupt_callback(INTERRUPT_SIGNAL_Timer, timer_handle);
     app();
     return 0;
 }

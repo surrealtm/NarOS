@@ -1,6 +1,7 @@
 #pragma once
 
 #define STATIC_ASSERT(expr) extern int (*__Static_assert_function (void)) [!!sizeof (struct { int static_assertion_failed: (expr) ? 2 : -1; })]
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 #define true 1
 #define false 0
