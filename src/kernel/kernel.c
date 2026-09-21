@@ -5,7 +5,7 @@
 
 static
 void clear_screen() {
-    int width, height;
+    s32 width, height;
     os_display_get_resolution(&width, &height);
     for(int y = 0; y < height; ++y) {
         for(int x = 0; x < width; ++x) {
