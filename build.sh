@@ -49,7 +49,7 @@ if [[ ${DEBUG_QEMU} == true ]]; then
 else
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
 fi
-LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_entry_point"
+LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
 
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 

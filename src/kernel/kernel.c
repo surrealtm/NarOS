@@ -1,3 +1,4 @@
+#include "core.h"
 #include "display.h"
 
 #include "display.c"
