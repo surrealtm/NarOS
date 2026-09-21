@@ -1,6 +1,6 @@
 #pragma once
 
-// @Incomplete: Provide API to clear the entire screen?
+#include "core.h"
 
 typedef enum OS_Display_Color {
     OS_DISPLAY_Black         = 0x00,
@@ -22,4 +22,5 @@ typedef enum OS_Display_Color {
 } OS_Display_Color;
 
 void os_display_get_resolution(s32 *width, s32 *height);
+void os_display_clear(char character, OS_Display_Color color);
 void os_display_set_character(s32 x, s32 y, char character, OS_Display_Color color);

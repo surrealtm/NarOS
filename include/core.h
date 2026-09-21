@@ -16,12 +16,12 @@ typedef signed char s8;
 typedef double f64;
 typedef float f32;
 
-typedef bool b8;
+typedef char b8;
 
-static_assert(sizeof(u64) == 8 && sizeof(s64) == 8);
-static_assert(sizeof(u32) == 4 && sizeof(s32) == 4);
-static_assert(sizeof(u16) == 2 && sizeof(s16) == 2);
-static_assert(sizeof(u8)  == 1 && sizeof(s8)  == 1);
-static_assert(sizeof(f64) == 8);
-static_assert(sizeof(f32) == 4);
-static_assert(sizeof(b8) == 1);
+_Static_assert(sizeof(u64) == 8 && sizeof(s64) == 8);
+_Static_assert(sizeof(u32) == 4 && sizeof(s32) == 4);
+_Static_assert(sizeof(u16) == 2 && sizeof(s16) == 2);
+_Static_assert(sizeof(u8)  == 1 && sizeof(s8)  == 1);
+_Static_assert(sizeof(f64) == 8);
+_Static_assert(sizeof(f32) == 4);
+_Static_assert(sizeof(b8)  == 1);
