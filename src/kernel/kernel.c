@@ -1,6 +1,7 @@
 //
 // Kernel Header Files
 //
+#include "core.h"
 #include "display.h"
 
 //

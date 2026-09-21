@@ -13,6 +13,7 @@ BUILD_DIR=build/
 IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
+CHECK_HEADERS=false
 C_COMPILER="gcc"
 
 if [[ "${1:-}" == "--run" ]]; then
@@ -21,6 +22,10 @@ fi
 
 if [[ "${1:-}" == "--debug" ]]; then
     DEBUG_QEMU=true
+fi
+
+if [[ "${1:-}" == "--check-headers" ]]; then
+    CHECK_HEADERS=true
 fi
 
 if [[ "${1:-}" == "--gcc" ]]; then
@@ -67,6 +72,17 @@ nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
 ${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -o ${BUILD_DIR}kernel.o
 ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
+
+#
+# Check that each header in the `include` directory is self-contained
+#
+if [[ ${CHECK_HEADERS} == true ]]; then
+    echo " + Checking the individual headers"
+    while IFS= read -r -d '' HEADER; do
+        printf '#include "%s"\n' "${HEADER}" |
+            "${C_COMPILER}" ${COMPILER_OPTIONS} "-I${INCLUDE_DIR}" -x c -fsyntax-only -
+    done < <(find "${INCLUDE_DIR}" -type f -name "*.h" -print0)
+fi
 
 #
 # Build the boot loader
