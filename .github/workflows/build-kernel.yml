@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build_gcc:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -23,3 +23,19 @@ jobs:
 
       - name: Build kernel
         run: ./build.sh
+
+  build_clang:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes binutils clang nasm
+
+      - name: Build kernel
+        run: ./build.sh --clang

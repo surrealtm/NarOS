@@ -13,6 +13,7 @@ BUILD_DIR=build/
 IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
+C_COMPILER="gcc"
 
 if [[ "${1:-}" == "--run" ]]; then
     RUN_QEMU=true
@@ -22,10 +23,17 @@ if [[ "${1:-}" == "--debug" ]]; then
     DEBUG_QEMU=true
 fi
 
+if [[ "${1:-}" == "--gcc" ]]; then
+    C_COMPILER="gcc"
+fi
+
+if [[ "${1:-}" == "--clang" ]]; then
+    C_COMPILER="clang"
+fi
+
 #
 # Log the build type
 #
-
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo "Debugging with QEMU..."
 elif [[ ${RUN_QEMU} == true ]]; then
@@ -33,6 +41,8 @@ elif [[ ${RUN_QEMU} == true ]]; then
 else
     echo "Making release build..."
 fi
+
+echo "Using C Compiler: ${C_COMPILER}"
 
 #
 # Prepare the work tree
@@ -54,7 +64,7 @@ LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 
 nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
-gcc ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -o ${BUILD_DIR}kernel.o
+${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -o ${BUILD_DIR}kernel.o
 ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
@@ -70,15 +80,12 @@ nasm ${BOOT_LOADER_DIR}boot_loader.asm -f bin -o ${BUILD_DIR}boot_loader.bin
 #
 # Assemble the final image
 #
-
 echo " + Assembling the final image"
-
 cat ${BUILD_DIR}boot_loader.bin ${BUILD_DIR}kernel.bin >${BUILD_DIR}${IMAGE_NAME}
 
 #
 # Report Metrics
 #
-
 BUILD_END=$(date +%s%N)
 BUILD_DURATION=$((BUILD_END - BUILD_START))
 echo "Build took $((BUILD_DURATION / 1000000)) ms."
