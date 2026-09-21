@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build_gcc:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -22,4 +22,21 @@ jobs:
           sudo apt-get install --yes binutils gcc-multilib nasm
 
       - name: Build kernel
-        run: ./build.sh
+        run: ./build.sh --gcc --check-headers
+
+  build_clang:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes binutils clang nasm
+
+      - name: Build kernel
+        run: ./build.sh --clang --check-headers
+

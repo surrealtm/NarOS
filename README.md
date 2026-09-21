@@ -9,7 +9,7 @@ This repository contains a very simple "Operating System" for educational purpos
 
 Before you can build and run the kernel, please install the following system dependencies:
 
-1. `GCC`
+1. `GCC` or `CLANG`
 2. `NASM`
 3. `QEMU` (only required for running the image virtually)
 
@@ -42,3 +42,7 @@ If you want to flash the image onto a USB drive (to run the image on real hardwa
 
 The `flash_to_disk` script will query which block device you want to flash the image to.
 **Note**: The drive is expected to be using the `FAT` formatting.
+
+#### Building with `Clang`
+
+By default, the `build.sh` script uses `GCC`. You can pass `--clang` as an argument to prefer this compiler. The pipeline in this repository ensures that the kernel builds with both.

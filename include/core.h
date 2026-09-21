@@ -1,5 +1,7 @@
 #pragma once
 
+#define STATIC_ASSERT(expr) extern int (*__Static_assert_function (void)) [!!sizeof (struct { int static_assertion_failed: (expr) ? 2 : -1; })]
+
 #define true 1
 #define false 0
 
@@ -18,10 +20,10 @@ typedef float f32;
 
 typedef char b8;
 
-_Static_assert(sizeof(u64) == 8 && sizeof(s64) == 8);
-_Static_assert(sizeof(u32) == 4 && sizeof(s32) == 4);
-_Static_assert(sizeof(u16) == 2 && sizeof(s16) == 2);
-_Static_assert(sizeof(u8)  == 1 && sizeof(s8)  == 1);
-_Static_assert(sizeof(f64) == 8);
-_Static_assert(sizeof(f32) == 4);
-_Static_assert(sizeof(b8)  == 1);
+STATIC_ASSERT(sizeof(u64) == 8 && sizeof(s64) == 8);
+STATIC_ASSERT(sizeof(u32) == 4 && sizeof(s32) == 4);
+STATIC_ASSERT(sizeof(u16) == 2 && sizeof(s16) == 2);
+STATIC_ASSERT(sizeof(u8)  == 1 && sizeof(s8)  == 1);
+STATIC_ASSERT(sizeof(f64) == 8);
+STATIC_ASSERT(sizeof(f32) == 4);
+STATIC_ASSERT(sizeof(b8)  == 1);
