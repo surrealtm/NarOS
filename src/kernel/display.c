@@ -12,7 +12,7 @@ void os_display_get_resolution(s32 *width, s32 *height) {
     *height = DISPLAY_HEIGHT;
 }
 
-void os_display_set_character(s32 x, s32 y, char character, char color) {
+void os_display_set_character(s32 x, s32 y, char character, OS_Display_Color color) {
     if(x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
         return;
     }

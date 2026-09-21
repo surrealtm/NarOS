@@ -9,7 +9,7 @@ void clear_screen() {
     os_display_get_resolution(&width, &height);
     for(int y = 0; y < height; ++y) {
         for(int x = 0; x < width; ++x) {
-            os_display_set_character(x, y, 'X', 0x0f);
+            os_display_set_character(x, y, 'X', ((x + y) % 2 == 0) ? OS_DISPLAY_White : OS_DISPLAY_Red);
         }
     }
 }
