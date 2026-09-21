@@ -43,7 +43,7 @@ mkdir -p ${BUILD_DIR}
 # Build the kernel
 #
 KERNEL_DIR=${SOURCE_DIR}kernel/
-COMPILER_OPTIONS="-m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -c -I${INCLUDE_DIR}"
+COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -c -I${INCLUDE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -Og"
 else
