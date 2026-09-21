@@ -74,12 +74,14 @@ else
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
 fi
 LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
+ASSEMBLER_OPTIONS="-f elf"
 
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 
-nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
+nasm ${KERNEL_DIR}kernel_main.asm ${ASSEMBLER_OPTIONS} -o ${BUILD_DIR}kernel_main.o
+nasm ${KERNEL_DIR}interrupt.asm ${ASSEMBLER_OPTIONS} -o ${BUILD_DIR}interrupt.o
 ${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -c -o ${BUILD_DIR}kernel.o
-ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
+ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}interrupt.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
 #

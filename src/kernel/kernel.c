@@ -28,11 +28,11 @@ void app(void) {
         for(int y = 0; y < height; ++y) {
             for(int x = 0; x < width; ++x) {
                 const b8 is_cell = (y * width + x) == index;
-                os_display_set_character(x, y, is_cell ? 'X' : '.', is_cell ? OS_DISPLAY_White : OS_DISPLAY_Red);
+                // @Temporary
+                if(5 / x)
+                    os_display_set_character(x, y, is_cell ? 'X' : '.', is_cell ? OS_DISPLAY_White : OS_DISPLAY_Red);
             }
         }
-
-        os_ctrl_sleep(16000000);
 
         ++index;
     }
@@ -43,7 +43,7 @@ void app(void) {
 // the kernel.
 //
 int kernel_entry_point(void) {
-    initialize_timer();
+    initialize_interrupt_handlers();
     app();
     return 0;
 }

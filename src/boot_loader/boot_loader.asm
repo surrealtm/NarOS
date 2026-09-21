@@ -158,7 +158,6 @@ DATA_SEGMENT equ gdt_data - gdt_start
 ;
 
 invoke_kernel:
-    cli
     lgdt [gdt_descriptor]
     ; Enable protected mode
     mov eax, cr0
