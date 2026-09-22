@@ -90,6 +90,8 @@ mkdir -p ${BUILD_DIR}
 # Build the kernel
 #
 KERNEL_DIR=${SOURCE_DIR}kernel/
+
+KERNEL_ASSEMBLER_OPTIONS="-f elf"
 COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -I${INCLUDE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -Og"
@@ -97,12 +99,11 @@ else
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
 fi
 LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
-ASSEMBLER_OPTIONS="-f elf"
 
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 
-nasm ${KERNEL_DIR}kernel_main.asm ${ASSEMBLER_OPTIONS} -o ${BUILD_DIR}kernel_main.o
-nasm ${KERNEL_DIR}interrupt.asm ${ASSEMBLER_OPTIONS} -o ${BUILD_DIR}interrupt.o
+nasm ${KERNEL_DIR}kernel_main.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}kernel_main.o
+nasm ${KERNEL_DIR}interrupt.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}interrupt.o
 ${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -c -o ${BUILD_DIR}kernel.o
 ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}interrupt.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
@@ -122,10 +123,13 @@ fi
 # Build the boot loader
 #
 BOOT_LOADER_DIR=${SOURCE_DIR}/boot_loader/
+BOOT_LOADER_ASSEMBLER_OPTIONS="-f bin"
+KERNEL_SIZE_IN_BYTES=$(wc -c <"${BUILD_DIR}kernel.bin")
+KERNEL_SECTOR_COUNT=$(((KERNEL_SIZE_IN_BYTES + 511) / 512))
 
 echo " + Compiling the boot loader"
-
-nasm ${BOOT_LOADER_DIR}boot_loader.asm -f bin -o ${BUILD_DIR}boot_loader.bin
+echo "   + Kernel is ${KERNEL_SIZE_IN_BYTES} bytes large and occupies ${KERNEL_SECTOR_COUNT} sectors..."
+nasm ${BOOT_LOADER_DIR}boot_loader.asm ${BOOT_LOADER_ASSEMBLER_OPTIONS} "-DKERNEL_SECTOR_COUNT=${KERNEL_SECTOR_COUNT}" -o ${BUILD_DIR}boot_loader.bin
 
 #
 # Assemble the final image

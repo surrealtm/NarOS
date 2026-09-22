@@ -44,6 +44,13 @@ boot_start:
 %endif
 
 ; ------------------------------------------------
+; Ensure compilation parameters are set
+; ------------------------------------------------
+%ifndef KERNEL_SECTOR_COUNT
+    %error "KERNEL_SECTOR_COUNT must be passed by the build environment."
+%endif
+
+; ------------------------------------------------
 ; Entry Point
 ; ------------------------------------------------
 entry_point:
@@ -185,7 +192,6 @@ invoke_kernel:
 ;
 [bits 16]
 KERNEL_OFFSET equ 0x1000
-KERNEL_SECTOR_COUNT equ 0x9
 INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
