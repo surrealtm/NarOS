@@ -24,6 +24,8 @@ static Interrupt_Descriptor_Table_Entry interrupt_descriptor_table[INTERRUPT_DES
 static Interrupt_Descriptor_Table_Pointer interrupt_descriptor_table_pointer;
 static Interrupt_Callback interrupt_callbacks[INTERRUPT_DESCRIPTOR_COUNT];
 
+extern void interrupt_dummy_master(void);
+extern void interrupt_dummy_slave(void);
 extern void interrupt_00(void);
 extern void interrupt_0e(void);
 extern void interrupt_20(void);
@@ -50,6 +52,29 @@ void remap_interrupt_handlers(void) {
     write_output_port(0xa1, 0x00);
 }
 
+static
+void setup_interrupt_descriptor_table(void) {
+    const u16 segment = 0x8; // This is the offset in bytes into the bootloader's GDT that points at the code segment descriptor
+    const u8 flags = 0x8e;
+
+    interrupt_descriptor_table_pointer.limit = sizeof(interrupt_descriptor_table) - 1;
+    interrupt_descriptor_table_pointer.base  = (u32) &interrupt_descriptor_table;
+
+    // Every interrupt descriptor needs to have a valid entry, otherwise the CPU will jump to an invalid memory
+    // address. For signals that we don't care about, we'll set up a dummy interrupt which should be less overhead.
+    const s16 last_master_signal = 39;
+    for(s16 signal = 0; signal <= last_master_signal; ++signal) {
+        install_interrupt_descriptor(signal, (u32) interrupt_dummy_master, segment, flags);
+    }
+    const s16 last_slave_signal = (s16) ARRAY_COUNT(interrupt_descriptor_table) - 1;
+    for(s16 signal = last_master_signal + 1; signal <= last_slave_signal; ++signal) {
+        install_interrupt_descriptor(signal, (u32) interrupt_dummy_slave, segment, flags);
+    }
+
+    // Install the interrupt handlers we actually care about. Only these will result in a call to `interrupt_handler`.
+    install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
+}
+
 extern
 void interrupt_handler(const volatile Interrupt_Register_State *state) {
     if(state->signal < ARRAY_COUNT(interrupt_callbacks) && interrupt_callbacks[state->signal]) {
@@ -71,19 +96,8 @@ void write_output_port(const u16 port, const u8 value) {
 }
 
 void initialize_interrupt_handlers(void) {
-    interrupt_descriptor_table_pointer.limit = sizeof(interrupt_descriptor_table) - 1;
-    interrupt_descriptor_table_pointer.base  = (u32) &interrupt_descriptor_table;
-    set_memory(interrupt_descriptor_table, 0, sizeof(interrupt_descriptor_table));
-
-    const u16 segment = 0x8;
-    const u8 flags = 0x8e;
     remap_interrupt_handlers();
-    install_interrupt_descriptor(0x00, (u32) interrupt_00, segment, flags);
-    // @Incomplete: Register a dummy signal for all unused interrupts, so that the CPU can call a valid address at least...
-    for(s16 s = 0x01; s < (s16) ARRAY_COUNT(interrupt_descriptor_table); ++s) {
-        install_interrupt_descriptor(s, (u32) interrupt_0e, segment, flags);
-    }
-    install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
+    setup_interrupt_descriptor_table();
     __asm__ volatile ("lidt %0" :: "m"(interrupt_descriptor_table_pointer));
     __asm__ volatile ("sti");
 }
