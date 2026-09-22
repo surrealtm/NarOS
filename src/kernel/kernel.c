@@ -21,7 +21,7 @@ volatile u32 idx = 0;
 volatile u32 seconds_passed = 0;
 
 static
-void timer_handle() {
+void timer_handle(void) {
     ++idx;
     if(idx % 100 == 0) {
         ++seconds_passed;
@@ -46,9 +46,6 @@ void app(void) {
     os_display_get_resolution(&width, &height);
 
     while(true) {
-        const u32 seconds_started = seconds_passed;
-        while(seconds_started == seconds_passed) {};
-
         os_display_clear(' ', OS_DISPLAY_White);
         const u32 cursor = print_string(0, 0, "Seconds passed: ");
 
@@ -71,6 +68,9 @@ void app(void) {
                 ++index;
             }
         }
+
+        const u32 seconds_started = seconds_passed;
+        while(seconds_started == seconds_passed) {};
     }
 }
 

@@ -16,6 +16,22 @@ DEBUG_QEMU=false
 CHECK_HEADERS=false
 C_COMPILER="gcc"
 
+print_help() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Build the NarOS kernel image.
+
+Options:
+  --run            Run the built image with QEMU
+  --debug          Debug the built image with GDB and QEMU
+  --check-headers  Check that every header is self-contained
+  --gcc            Build using GCC (default)
+  --clang          Build using Clang
+  --help           Display this help and exit
+EOF
+}
+
 for ARGUMENT in "$@"; do
     case "${ARGUMENT}" in
     --run)
@@ -38,8 +54,15 @@ for ARGUMENT in "$@"; do
         C_COMPILER="clang"
         ;;
 
+    --help)
+        print_help
+        exit 0
+        ;;
+
     *)
-        echo " -- Unknown Build Argument ${ARGUMENT}" >&2
+        echo " -- Unknown Build Argument '${ARGUMENT}'" >&2
+        echo >&2
+        print_help >&2
         exit 1
         ;;
     esac

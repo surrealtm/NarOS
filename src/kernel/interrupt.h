@@ -1,6 +1,6 @@
 #pragma once
 
-typedef void (*Interrupt_Callback)();
+typedef void (*Interrupt_Callback)(void);
 
 typedef enum Interrupt_Signal {
     INTERRUPT_SIGNAL_Timer = 0x20,

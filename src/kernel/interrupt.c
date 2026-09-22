@@ -34,7 +34,7 @@ void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 seg
 }
 
 static
-void remap_interrupt_handlers() {
+void remap_interrupt_handlers(void) {
     // In protected mode, IDT entry 8 is a double fault. Without remapping, every time IRQ0 fires, we would get
     // a double fault exception, which is *not* actually what's happening.
     // Therefore, we tell the interrupt controllers to remap IRQ0 to IDT entries 32 to 47
