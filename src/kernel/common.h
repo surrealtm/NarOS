@@ -1,2 +1,3 @@
-#define packed_struct __attribute__((packed))
+#pragma once
 
+#define packed_struct __attribute__((packed))

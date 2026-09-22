@@ -26,8 +26,6 @@ static Interrupt_Callback interrupt_callbacks[INTERRUPT_DESCRIPTOR_COUNT];
 
 extern void interrupt_dummy_master(void);
 extern void interrupt_dummy_slave(void);
-extern void interrupt_00(void);
-extern void interrupt_0e(void);
 extern void interrupt_20(void);
 
 static
@@ -75,7 +73,10 @@ void setup_interrupt_descriptor_table(void) {
     install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
 }
 
-extern
+/**
+ * Called from the assembly interrupt routines.
+ * Prevent the compiler from optimizing out this entire function.
+ */
 void interrupt_handler(const volatile Interrupt_Register_State *state) {
     if(state->signal < ARRAY_COUNT(interrupt_callbacks) && interrupt_callbacks[state->signal]) {
         interrupt_callbacks[state->signal]();
