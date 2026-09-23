@@ -2,31 +2,28 @@
 // Public Header Files
 //
 #include "core.h"
+#include "ctrl.h"
 #include "display.h"
 
 //
 // Internal Header Files
 //
 #include "common.h"
+#include "runtime.h"
 #include "interrupt.h"
 
 //
-// Kernel Source Files
+// Public Source Files
 //
-#include "interrupt.c"
+#include "ctrl.c"
 #include "core.c"
 #include "display.c"
 
-static volatile u32 idx = 0;
-static volatile u32 seconds_passed = 1;
-
-static
-void timer_handle(void) {
-    ++idx;
-    if(idx % 100 == 0) {
-        ++seconds_passed;
-    }
-}
+//
+// Internal Source Files
+//
+#include "runtime.c"
+#include "interrupt.c"
 
 static
 u32 print_string(const u32 x, const u32 y, const char *text) {
@@ -75,13 +72,12 @@ void app(void) {
     s32 width, height;
     os_display_get_resolution(&width, &height);
 
+    u32 seconds_passed = 0;
     while(true) {
         os_display_clear(' ', OS_DISPLAY_White);
         const u32 cursor = print_string(0, 0, "Seconds passed: ");
-        print_number(cursor, 0, seconds_passed);
-
-        const u32 seconds_started = seconds_passed;
-        while(seconds_started == seconds_passed) {};
+        print_number(cursor, 0, seconds_passed++);
+        os_ctrl_sleep(1000000000);
     }
 }
 
@@ -91,12 +87,7 @@ void app(void) {
 //
 int kernel_entry_point(void) {
     initialize_interrupt_handlers();
-
-    int divisor = 1193180 / 100;
-    write_output_port(0x43, 0x36);
-    write_output_port(0x40, divisor & 0xff);
-    write_output_port(0x40, divisor >> 8);
-    register_interrupt_callback(INTERRUPT_SIGNAL_Timer, timer_handle);
+    initialize_tick_counter();
     app();
     return 0;
 }

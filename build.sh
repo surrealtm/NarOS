@@ -92,13 +92,13 @@ mkdir -p ${BUILD_DIR}
 KERNEL_DIR=${SOURCE_DIR}kernel/
 
 KERNEL_ASSEMBLER_OPTIONS="-f elf"
-COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -I${INCLUDE_DIR}"
+COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -O0"
 else
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
 fi
-LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
+LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
 
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 

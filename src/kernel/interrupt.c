@@ -1,3 +1,5 @@
+/* ----------------------------------------------- Interrupts ----------------------------------------------- */
+
 #define INTERRUPT_DESCRIPTOR_COUNT 256
 
 typedef struct Interrupt_Descriptor_Table_Entry {
@@ -108,4 +110,33 @@ void register_interrupt_callback(Interrupt_Signal signal, Interrupt_Callback cal
         return;
     }
     interrupt_callbacks[signal] = callback;
+}
+
+/* ------------------------------------------------- Timing ------------------------------------------------- */
+
+#define PIT_HZ 1193180LL
+#define TICKS_PER_SECOND 1000LL
+#define NANOSECONDS_TO_SECONDS 1000000000LL
+
+volatile u64 tick_counter = 0; // This is modified by an interrupt handler, which confuses the optimizer when used in loops
+
+static
+void tick_handler() {
+    ++tick_counter;
+}
+
+void initialize_tick_counter() {
+    const int divisor = PIT_HZ / TICKS_PER_SECOND;
+    write_output_port(0x43, 0x36);
+    write_output_port(0x40, divisor & 0xff);
+    write_output_port(0x40, divisor >> 8);
+    register_interrupt_callback(INTERRUPT_SIGNAL_Timer, tick_handler);
+}
+
+u64 current_tick_counter() {
+    return tick_counter;
+}
+
+u64 ticks_from_nanoseconds(u64 nanoseconds) {
+    return (nanoseconds / NANOSECONDS_TO_SECONDS) * TICKS_PER_SECOND;
 }
