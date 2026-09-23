@@ -8,7 +8,9 @@ typedef enum Interrupt_Signal {
     INTERRUPT_SIGNAL_Timer = 0x20,
 } Interrupt_Signal;
 
-void write_output_port(u16 port, u8 value);
+void write_output_port_u8(u16 port, u8 value);
+void write_output_port_u16(u16 port, u16 value);
+u16 read_input_port_u16(u16 port);
 void initialize_interrupt_handlers(void);
 void register_interrupt_callback(Interrupt_Signal signal, Interrupt_Callback callback);
 

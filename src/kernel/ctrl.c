@@ -18,3 +18,7 @@ void os_ctrl_exit(void) {
 b8 os_ctrl_exit_requested(void) {
     return exit_requested;
 }
+
+void os_ctrl_shut_down(void) {
+    acpi_shut_down();
+}

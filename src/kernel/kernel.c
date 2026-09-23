@@ -10,6 +10,7 @@
 //
 #include "common.h"
 #include "runtime.h"
+#include "acpi.h"
 #include "interrupt.h"
 
 //
@@ -23,6 +24,7 @@
 // Internal Source Files
 //
 #include "runtime.c"
+#include "acpi.c"
 #include "interrupt.c"
 
 static
@@ -77,7 +79,7 @@ void app(void) {
         os_display_clear(' ', OS_DISPLAY_White);
         const u32 cursor = print_string(0, 0, "Seconds passed: ");
         print_number(cursor, 0, seconds_passed);
-        if(seconds_passed == 60) os_ctrl_exit();
+        if(seconds_passed == 2) os_ctrl_exit();
         os_ctrl_sleep(1000000000);
         ++seconds_passed;
     }
@@ -90,6 +92,8 @@ void app(void) {
 int kernel_entry_point(void) {
     initialize_interrupt_handlers();
     initialize_tick_counter();
+    acpi_initialize();
     app();
+    os_ctrl_shut_down();
     return 0;
 }

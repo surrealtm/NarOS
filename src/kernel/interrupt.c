@@ -40,16 +40,16 @@ void remap_interrupt_handlers(void) {
     // In protected mode, IDT entry 8 is a double fault. Without remapping, every time IRQ0 fires, we would get
     // a double fault exception, which is *not* actually what's happening.
     // Therefore, we tell the interrupt controllers to remap IRQ0 to IDT entries 32 to 47
-    write_output_port(0x20, 0x11);
-    write_output_port(0xa0, 0x11);
-    write_output_port(0x21, 0x20);
-    write_output_port(0xa1, 0x28);
-    write_output_port(0x21, 0x04);
-    write_output_port(0xa1, 0x02);
-    write_output_port(0x21, 0x01);
-    write_output_port(0xa1, 0x01);
-    write_output_port(0x21, 0x00);
-    write_output_port(0xa1, 0x00);
+    write_output_port_u8(0x20, 0x11);
+    write_output_port_u8(0xa0, 0x11);
+    write_output_port_u8(0x21, 0x20);
+    write_output_port_u8(0xa1, 0x28);
+    write_output_port_u8(0x21, 0x04);
+    write_output_port_u8(0xa1, 0x02);
+    write_output_port_u8(0x21, 0x01);
+    write_output_port_u8(0xa1, 0x01);
+    write_output_port_u8(0x21, 0x00);
+    write_output_port_u8(0xa1, 0x00);
 }
 
 static
@@ -87,15 +87,25 @@ void interrupt_handler(const volatile Interrupt_Register_State *state) {
     if(state->signal >= 40) {
         // If the signal is greater than or equal to 40, then we need to send an EOI to
         // the slave interrupt controller
-        write_output_port(0xa0, 0x20);
+        write_output_port_u8(0xa0, 0x20);
     }
 
     // Send an EOI to the master interrupt controller
-    write_output_port(0x20, 0x20);
+    write_output_port_u8(0x20, 0x20);
 }
 
-void write_output_port(const u16 port, const u8 value) {
+void write_output_port_u8(const u16 port, const u8 value) {
     __asm__ volatile ("outb %0, %1" :: "a" (value), "Nd" (port));
+}
+
+void write_output_port_u16(const u16 port, const u16 value) {
+    __asm__ volatile ("outw %0, %1" :: "a" (value), "Nd" (port));
+}
+
+u16 read_input_port_u16(const u16 port) {
+    u16 value;
+    __asm__ volatile ("inw %w1, %0" : "=a" (value) : "Nd" (port));
+    return value;
 }
 
 void initialize_interrupt_handlers(void) {
@@ -127,9 +137,9 @@ void tick_handler(void) {
 
 void initialize_tick_counter(void) {
     const int divisor = PIT_HZ / TICKS_PER_SECOND;
-    write_output_port(0x43, 0x36);
-    write_output_port(0x40, divisor & 0xff);
-    write_output_port(0x40, divisor >> 8);
+    write_output_port_u8(0x43, 0x36);
+    write_output_port_u8(0x40, divisor & 0xff);
+    write_output_port_u8(0x40, divisor >> 8);
     register_interrupt_callback(INTERRUPT_SIGNAL_Timer, tick_handler);
 }
 
