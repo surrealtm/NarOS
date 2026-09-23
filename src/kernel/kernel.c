@@ -73,11 +73,13 @@ void app(void) {
     os_display_get_resolution(&width, &height);
 
     u32 seconds_passed = 0;
-    while(true) {
+    while(!os_ctrl_exit_requested()) {
         os_display_clear(' ', OS_DISPLAY_White);
         const u32 cursor = print_string(0, 0, "Seconds passed: ");
-        print_number(cursor, 0, seconds_passed++);
+        print_number(cursor, 0, seconds_passed);
+        if(seconds_passed == 60) os_ctrl_exit();
         os_ctrl_sleep(1000000000);
+        ++seconds_passed;
     }
 }
 

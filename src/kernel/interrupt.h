@@ -14,6 +14,6 @@ void register_interrupt_callback(Interrupt_Signal signal, Interrupt_Callback cal
 
 /* ------------------------------------------------- Timing ------------------------------------------------- */
 
-void initialize_tick_counter();
-u64 current_tick_counter();
+void initialize_tick_counter(void);
+u64 current_tick_counter(void);
 u64 ticks_from_nanoseconds(u64 nanoseconds);

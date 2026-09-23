@@ -68,12 +68,7 @@ entry_point:
     call print_string
 
     call load_kernel_from_disk
-    call invoke_kernel
-
-    mov si, KERNEL_EXIT_MSG
-    call print_string
-
-    call halt
+    call invoke_kernel ; This function will never return, as we've entered 32 bit mode...
 
 ;
 ; Prints a string using BIOS interrupts.
@@ -185,7 +180,7 @@ invoke_kernel:
     mov ebp, 0x90000 ; Set up the stack pointer
     mov esp, ebp
     call KERNEL_OFFSET
-    ret
+    call halt ; We don't expect the kernel to ever return, but just to be sure...
 
 ;
 ; Declare data

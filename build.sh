@@ -14,7 +14,7 @@ IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
 CHECK_HEADERS=false
-C_COMPILER="gcc"
+C_COMPILER="clang"
 
 print_help() {
     cat <<EOF
@@ -26,8 +26,8 @@ Options:
   --run            Run the built image with QEMU
   --debug          Debug the built image with GDB and QEMU
   --check-headers  Check that every header is self-contained
-  --gcc            Build using GCC (default)
-  --clang          Build using Clang
+  --gcc            Build using GCC
+  --clang          Build using Clang (default)
   --help           Display this help and exit
 EOF
 }
