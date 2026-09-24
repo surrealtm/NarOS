@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.h"
+#include "base.h"
 
 void os_ctrl_sleep(u64 nanoseconds);
 void os_ctrl_halt(void);

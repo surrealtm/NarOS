@@ -1,8 +1,6 @@
 #pragma once
 
-#include "core.h"
-
-#define packed_struct __attribute__((packed))
+#include "base.h"
 
 /**
  * Implements division of two unsigned 64 bit integers.

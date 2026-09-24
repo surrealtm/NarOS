@@ -29,12 +29,12 @@ typedef struct System_Description_Table {
     u32 oem_revision;
     u32 creator_id;
     u32 creator_revision;
-} packed_struct System_Description_Table;
+} PACKED_STRUCT System_Description_Table;
 
 typedef struct Root_System_Description_Table {
     System_Description_Table header;
     void *entries[/*(header.Length - sizeof(header)) / sizeof(void*)*/];
-} packed_struct Root_System_Description_Table;
+} PACKED_STRUCT Root_System_Description_Table;
 
 typedef struct Root_System_Description_Pointer {
     s8 signature[8];

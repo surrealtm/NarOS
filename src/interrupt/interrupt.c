@@ -11,12 +11,12 @@ typedef struct Interrupt_Descriptor_Table_Entry {
     u8 padding;
     u8 flags;
     u16 base_hi;
-} packed_struct Interrupt_Descriptor_Table_Entry;
+} PACKED_STRUCT Interrupt_Descriptor_Table_Entry;
 
 typedef struct Interrupt_Descriptor_Table_Pointer {
     u16 limit;
     u32 base;
-} packed_struct Interrupt_Descriptor_Table_Pointer;
+} PACKED_STRUCT Interrupt_Descriptor_Table_Pointer;
 
 typedef struct Interrupt_Register_State {
     u32 gs, fs, es, ds;
