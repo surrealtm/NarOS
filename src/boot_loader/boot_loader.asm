@@ -44,6 +44,13 @@ boot_start:
 %endif
 
 ; ------------------------------------------------
+; Ensure compilation parameters are set
+; ------------------------------------------------
+%ifndef KERNEL_SECTOR_COUNT
+    %error "KERNEL_SECTOR_COUNT must be passed by the build environment."
+%endif
+
+; ------------------------------------------------
 ; Entry Point
 ; ------------------------------------------------
 entry_point:
@@ -61,12 +68,7 @@ entry_point:
     call print_string
 
     call load_kernel_from_disk
-    call invoke_kernel
-
-    mov si, KERNEL_EXIT_MSG
-    call print_string
-
-    call halt
+    call invoke_kernel ; This function will never return, as we've entered 32 bit mode...
 
 ;
 ; Prints a string using BIOS interrupts.
@@ -158,7 +160,6 @@ DATA_SEGMENT equ gdt_data - gdt_start
 ;
 
 invoke_kernel:
-    cli
     lgdt [gdt_descriptor]
     ; Enable protected mode
     mov eax, cr0
@@ -179,14 +180,13 @@ invoke_kernel:
     mov ebp, 0x90000 ; Set up the stack pointer
     mov esp, ebp
     call KERNEL_OFFSET
-    ret
+    call halt ; We don't expect the kernel to ever return, but just to be sure...
 
 ;
 ; Declare data
 ;
 [bits 16]
 KERNEL_OFFSET equ 0x1000
-KERNEL_SECTOR_COUNT equ 0x9
 INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0

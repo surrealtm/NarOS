@@ -14,7 +14,23 @@ IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
 CHECK_HEADERS=false
-C_COMPILER="gcc"
+C_COMPILER="clang"
+
+print_help() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Build the NarOS kernel image.
+
+Options:
+  --run            Run the built image with QEMU
+  --debug          Debug the built image with GDB and QEMU
+  --check-headers  Check that every header is self-contained
+  --gcc            Build using GCC
+  --clang          Build using Clang (default)
+  --help           Display this help and exit
+EOF
+}
 
 for ARGUMENT in "$@"; do
     case "${ARGUMENT}" in
@@ -38,8 +54,15 @@ for ARGUMENT in "$@"; do
         C_COMPILER="clang"
         ;;
 
+    --help)
+        print_help
+        exit 0
+        ;;
+
     *)
-        echo " -- Unknown Build Argument ${ARGUMENT}" >&2
+        echo " -- Unknown Build Argument '${ARGUMENT}'" >&2
+        echo >&2
+        print_help >&2
         exit 1
         ;;
     esac
@@ -67,19 +90,22 @@ mkdir -p ${BUILD_DIR}
 # Build the kernel
 #
 KERNEL_DIR=${SOURCE_DIR}kernel/
-COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic -I${INCLUDE_DIR}"
+
+KERNEL_ASSEMBLER_OPTIONS="-f elf"
+COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
-    COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -Og"
+    COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -O0"
 else
     COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
 fi
-LINKER_OPTIONS="-m elf_i386 -Ttext 0x1000 -e kernel_main"
+LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
 
 echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
 
-nasm ${KERNEL_DIR}kernel_main.asm -f elf -o ${BUILD_DIR}kernel_main.o
+nasm ${KERNEL_DIR}kernel_main.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}kernel_main.o
+nasm ${KERNEL_DIR}interrupt.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}interrupt.o
 ${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -c -o ${BUILD_DIR}kernel.o
-ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
+ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}interrupt.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
 #
@@ -97,10 +123,13 @@ fi
 # Build the boot loader
 #
 BOOT_LOADER_DIR=${SOURCE_DIR}/boot_loader/
+BOOT_LOADER_ASSEMBLER_OPTIONS="-f bin"
+KERNEL_SIZE_IN_BYTES=$(wc -c <"${BUILD_DIR}kernel.bin")
+KERNEL_SECTOR_COUNT=$(((KERNEL_SIZE_IN_BYTES + 511) / 512))
 
 echo " + Compiling the boot loader"
-
-nasm ${BOOT_LOADER_DIR}boot_loader.asm -f bin -o ${BUILD_DIR}boot_loader.bin
+echo "   + Kernel is ${KERNEL_SIZE_IN_BYTES} bytes large and occupies ${KERNEL_SECTOR_COUNT} sectors..."
+nasm ${BOOT_LOADER_DIR}boot_loader.asm ${BOOT_LOADER_ASSEMBLER_OPTIONS} "-DKERNEL_SECTOR_COUNT=${KERNEL_SECTOR_COUNT}" -o ${BUILD_DIR}boot_loader.bin
 
 #
 # Assemble the final image
