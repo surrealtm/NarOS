@@ -1,14 +1,12 @@
 [bits 16]
 [org 0x7c00]
 
-; Jump over the FAT BPB
 jmp short boot_start
 nop
 
-; ------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------------
 ; FAT12/16 BIOS PARAMETER BLOCK
-; ------------------------------------------------
-
+; ----------------------------------------------------------------------------------------------------------------
 db "NAROS   " ; OEM name, exactly 8 bytes
 dw 512;       ; Bytes per sector
 db 1          ; Sectors per cluster
@@ -23,10 +21,9 @@ dw 2          ; Number of heads
 dd 0          ; Hidden sectors
 dd 0          ; Large total-sector count
 
-; ------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------------
 ; FAT12/16 EXTENDED BPB
-; ------------------------------------------------
-
+; ----------------------------------------------------------------------------------------------------------------
 db 0x00          ; Bios drive number
 db 0x00          ; Reserved
 db 0x29          ; Extended boot signature
@@ -43,16 +40,16 @@ boot_start:
     %error "Boot code must start at byte 0x3e - the BPB was expected to take this much space."
 %endif
 
-; ------------------------------------------------
-; Ensure compilation parameters are set
-; ------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------------
+; Check Compilation Parameters
+; ----------------------------------------------------------------------------------------------------------------
 %ifndef KERNEL_SECTOR_COUNT
     %error "KERNEL_SECTOR_COUNT must be passed by the build environment."
 %endif
 
-; ------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------------
 ; Entry Point
-; ------------------------------------------------
+; ----------------------------------------------------------------------------------------------------------------
 entry_point:
     ; INT instructions use the stack to save FLAGS, CS and IP.
     cli
@@ -70,9 +67,6 @@ entry_point:
     call load_kernel_from_disk
     call invoke_kernel ; This function will never return, as we've entered 32 bit mode...
 
-;
-; Prints a string using BIOS interrupts.
-;
 print_string:
     mov ah, 0x0e
     mov bx, 0x0007
@@ -89,18 +83,12 @@ print_string:
     mov es, ax
     ret
 
-;
-; Stops any code execution on the CPU and never returns.
-;
 halt:
     sti
 .loop:
     hlt ; If interrupted, just go back to halting
     jmp .loop
 
-;
-; Loads the kernel code from the boot drive into memory
-;
 load_kernel_from_disk:
     pusha
     mov ah, 0x2 ; Read Mode
@@ -124,9 +112,33 @@ load_kernel_from_disk:
     call print_string
     call halt
 
-;
-; Declare code and data segments when in 32 bit mode
-;
+invoke_kernel:
+    lgdt [gdt_descriptor]
+    ; Enable protected mode
+    mov eax, cr0
+    or eax, 0x1
+    mov cr0, eax
+    jmp CODE_SEGMENT:.init_32bit
+
+[bits 32]
+.init_32bit:
+    ; Update segment registers to point at the allocated segments
+    mov ax, DATA_SEGMENT
+    mov ds, ax
+    mov ss, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+.call_kernel_entry_point:
+    mov ebp, 0x90000 ; Set up the stack pointer
+    mov esp, ebp
+    call KERNEL_OFFSET
+    call halt ; We don't expect the kernel to ever return, but just to be sure...
+[bits 16]
+
+; ----------------------------------------------------------------------------------------------------------------
+; Global Descriptor Table
+; ----------------------------------------------------------------------------------------------------------------
 gdt_start:
     dq 0x0
 
@@ -155,37 +167,9 @@ gdt_descriptor:
 CODE_SEGMENT equ gdt_code - gdt_start
 DATA_SEGMENT equ gdt_data - gdt_start
 
-;
-; Implement switching to 32 bit mode
-;
-
-invoke_kernel:
-    lgdt [gdt_descriptor]
-    ; Enable protected mode
-    mov eax, cr0
-    or eax, 0x1
-    mov cr0, eax
-    jmp CODE_SEGMENT:.init_32bit
-
-[bits 32]
-.init_32bit:
-    ; Update segment registers to point at the allocated segments
-    mov ax, DATA_SEGMENT
-    mov ds, ax
-    mov ss, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-.call_kernel_entry_point:
-    mov ebp, 0x90000 ; Set up the stack pointer
-    mov esp, ebp
-    call KERNEL_OFFSET
-    call halt ; We don't expect the kernel to ever return, but just to be sure...
-
-;
-; Declare data
-;
-[bits 16]
+; ----------------------------------------------------------------------------------------------------------------
+; Data Declarations
+; ----------------------------------------------------------------------------------------------------------------
 KERNEL_OFFSET equ 0x1000
 INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0

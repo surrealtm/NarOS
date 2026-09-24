@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.h"
+#include "base.h"
 
 typedef enum OS_Display_Color {
     OS_DISPLAY_Black         = 0x00,

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "base.h"
+
 /**
  * Implements division of two unsigned 64 bit integers.
  * The X86 instruction set does not support this natively, so compilers usually provide their own

@@ -4,9 +4,9 @@ set -e
 
 BUILD_START=$(date +%s%N)
 
-#
-# Set up common variables
-#
+# ----------------------------------------------------------------------------------------------------------------
+# Common Variables
+# ----------------------------------------------------------------------------------------------------------------
 INCLUDE_DIR=include/
 SOURCE_DIR=src/
 BUILD_DIR=build/
@@ -14,8 +14,12 @@ IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
 CHECK_HEADERS=false
-C_COMPILER="clang"
+COMPILER="clang"
+ASSEMBLER="nasm"
 
+# ----------------------------------------------------------------------------------------------------------------
+# Argument Parsing
+# ----------------------------------------------------------------------------------------------------------------
 print_help() {
     cat <<EOF
 Usage: $0 [OPTIONS]
@@ -47,11 +51,11 @@ for ARGUMENT in "$@"; do
         ;;
 
     --gcc)
-        C_COMPILER="gcc"
+        COMPILER="gcc"
         ;;
 
     --clang)
-        C_COMPILER="clang"
+        COMPILER="clang"
         ;;
 
     --help)
@@ -68,9 +72,9 @@ for ARGUMENT in "$@"; do
     esac
 done
 
-#
-# Log the build type
-#
+# ----------------------------------------------------------------------------------------------------------------
+# Log Build Configuration
+# ----------------------------------------------------------------------------------------------------------------
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo "Debugging with QEMU..."
 elif [[ ${RUN_QEMU} == true ]]; then
@@ -79,74 +83,108 @@ else
     echo "Making release build..."
 fi
 
-echo "Using C Compiler: ${C_COMPILER}"
+echo "Using C Compiler: ${COMPILER}"
 
-#
-# Prepare the work tree
-#
+# ----------------------------------------------------------------------------------------------------------------
+# Prepare Build
+# ----------------------------------------------------------------------------------------------------------------
 mkdir -p ${BUILD_DIR}
 
-#
-# Build the kernel
-#
-KERNEL_DIR=${SOURCE_DIR}kernel/
+# ----------------------------------------------------------------------------------------------------------------
+# Compilation Helpers
+# ----------------------------------------------------------------------------------------------------------------
+object_file_path() {
+    local source="$1"
+    local name="${source//\//_}"
+    name="${name}.o"
+    printf '%s%s\n' "${BUILD_DIR}" "${name}"
+}
 
+# ----------------------------------------------------------------------------------------------------------------
+# Build the Kernel
+# ----------------------------------------------------------------------------------------------------------------
+KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
 KERNEL_ASSEMBLER_OPTIONS="-f elf"
-COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR}"
+KERNEL_COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR} -I${SOURCE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
-    COMPILER_OPTIONS="${COMPILER_OPTIONS} -g -O0"
+    KERNEL_COMPILER_OPTIONS="${KERNEL_COMPILER_OPTIONS} -g -O0"
 else
-    COMPILER_OPTIONS="${COMPILER_OPTIONS} -O3"
+    KERNEL_COMPILER_OPTIONS="${KERNEL_COMPILER_OPTIONS} -O3"
 fi
-LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
 
-echo " + Compiling the kernel with options: ${COMPILER_OPTIONS}"
+echo " + Compiling the kernel with options: ${KERNEL_COMPILER_OPTIONS}"
 
-nasm ${KERNEL_DIR}kernel_main.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}kernel_main.o
-nasm ${KERNEL_DIR}interrupt.asm ${KERNEL_ASSEMBLER_OPTIONS} -o ${BUILD_DIR}interrupt.o
-${C_COMPILER} ${COMPILER_OPTIONS} ${KERNEL_DIR}kernel.c -c -o ${BUILD_DIR}kernel.o
-ld ${LINKER_OPTIONS} ${BUILD_DIR}kernel_main.o ${BUILD_DIR}interrupt.o ${BUILD_DIR}kernel.o -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
+KERNEL_C_SOURCE_FILES=(
+    "acpi/acpi.c"
+    "base/base.c"
+    "ctrl/ctrl.c"
+    "display/display.c"
+    "entry_point/entry_point.c"
+    "interrupt/interrupt.c"
+    "math/math.c"
+    "port/port.c"
+)
+
+KERNEL_ASM_SOURCE_FILES=(
+    "entry_point/entry_point.asm"
+    "interrupt/interrupt.asm"
+)
+
+KERNEL_OBJECT_FILES=""
+
+for FILEPATH in "${KERNEL_ASM_SOURCE_FILES[@]}"; do
+    OBJECT_FILE=$(object_file_path ${FILEPATH})
+    ${ASSEMBLER} ${KERNEL_ASSEMBLER_OPTIONS} ${SOURCE_DIR}${FILEPATH} -o ${OBJECT_FILE}
+    KERNEL_OBJECT_FILES="${KERNEL_OBJECT_FILES} ${OBJECT_FILE}"
+done
+
+for FILEPATH in "${KERNEL_C_SOURCE_FILES[@]}"; do
+    OBJECT_FILE=$(object_file_path ${FILEPATH})
+    ${COMPILER} ${KERNEL_COMPILER_OPTIONS} ${SOURCE_DIR}${FILEPATH} -c -o ${OBJECT_FILE}
+    KERNEL_OBJECT_FILES="${KERNEL_OBJECT_FILES} ${OBJECT_FILE}"
+done
+
+ld ${KERNEL_LINKER_OPTIONS} ${KERNEL_OBJECT_FILES} -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
-#
-# Check that each header in the `include` directory is self-contained
-#
-if [[ ${CHECK_HEADERS} == true ]]; then
-    echo " + Checking the individual headers"
-    while IFS= read -r -d '' HEADER; do
-        printf '#include "%s"\n' "${HEADER}" |
-            "${C_COMPILER}" ${COMPILER_OPTIONS} "-I${INCLUDE_DIR}" -x c -fsyntax-only -
-    done < <(find "${INCLUDE_DIR}" -type f -name "*.h" -print0)
-fi
-
-#
-# Build the boot loader
-#
-BOOT_LOADER_DIR=${SOURCE_DIR}/boot_loader/
+# ----------------------------------------------------------------------------------------------------------------
+# Build the Boot Loader
+# ----------------------------------------------------------------------------------------------------------------
 BOOT_LOADER_ASSEMBLER_OPTIONS="-f bin"
 KERNEL_SIZE_IN_BYTES=$(wc -c <"${BUILD_DIR}kernel.bin")
 KERNEL_SECTOR_COUNT=$(((KERNEL_SIZE_IN_BYTES + 511) / 512))
 
-echo " + Compiling the boot loader"
+echo " + Compiling the boot loader with options: ${BOOT_LOADER_ASSEMBLER_OPTIONS}"
 echo "   + Kernel is ${KERNEL_SIZE_IN_BYTES} bytes large and occupies ${KERNEL_SECTOR_COUNT} sectors..."
-nasm ${BOOT_LOADER_DIR}boot_loader.asm ${BOOT_LOADER_ASSEMBLER_OPTIONS} "-DKERNEL_SECTOR_COUNT=${KERNEL_SECTOR_COUNT}" -o ${BUILD_DIR}boot_loader.bin
+${ASSEMBLER} ${SOURCE_DIR}boot_loader/boot_loader.asm ${BOOT_LOADER_ASSEMBLER_OPTIONS} "-DKERNEL_SECTOR_COUNT=${KERNEL_SECTOR_COUNT}" -o ${BUILD_DIR}boot_loader.bin
 
-#
-# Assemble the final image
-#
+# ----------------------------------------------------------------------------------------------------------------
+# Assemble Final Image
+# ----------------------------------------------------------------------------------------------------------------
 echo " + Assembling the final image"
 cat ${BUILD_DIR}boot_loader.bin ${BUILD_DIR}kernel.bin >${BUILD_DIR}${IMAGE_NAME}
 
-#
+# ----------------------------------------------------------------------------------------------------------------
 # Report Metrics
-#
+# ----------------------------------------------------------------------------------------------------------------
 BUILD_END=$(date +%s%N)
 BUILD_DURATION=$((BUILD_END - BUILD_START))
 echo "Build took $((BUILD_DURATION / 1000000)) ms."
 
-#
-# Run the final image using qemu
-#
+# ----------------------------------------------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------------------------------------------
+if [[ ${CHECK_HEADERS} == true ]]; then
+    echo " + Checking the individual headers"
+    while IFS= read -r -d '' HEADER; do
+        printf '#include "%s"\n' "${HEADER}" |
+            "${COMPILER}" ${KERNEL_COMPILER_OPTIONS} "-I${INCLUDE_DIR}" -x c -fsyntax-only -
+    done < <(find "${INCLUDE_DIR}" -type f -name "*.h" -print0)
+fi
+
+# ----------------------------------------------------------------------------------------------------------------
+# Launch QEMU
+# ----------------------------------------------------------------------------------------------------------------
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
     $TERMINAL -e gdb \
