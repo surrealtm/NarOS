@@ -62,10 +62,10 @@ void app(void) {
     }
 }
 
-//
-// This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
-// the kernel.
-//
+/**
+ * This procedure is called by the `kernel_main` file, once the boot loader has loaded and invoked
+ * the kernel.
+ */
 int kernel_entry_point(void) {
     initialize_interrupt_handlers();
     initialize_tick_counter();
