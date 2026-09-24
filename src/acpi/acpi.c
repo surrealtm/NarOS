@@ -1,6 +1,5 @@
 #include "acpi.h"
 #include "ctrl.h"
-#include "common/common.h"
 #include "interrupt/interrupt.h"
 
 typedef struct Fixed_ACPI_Description_Table {

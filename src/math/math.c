@@ -1,4 +1,4 @@
-#include "common.h"
+#include "math.h"
 
 typedef struct {
     u32 hi;
