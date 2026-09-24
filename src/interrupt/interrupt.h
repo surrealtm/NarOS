@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core.h"
+
 /* ----------------------------------------------- Interrupts ----------------------------------------------- */
 
 typedef void (*Interrupt_Callback)(void);

@@ -1,31 +1,9 @@
-//
-// Public Header Files
-//
 #include "core.h"
-#include "ctrl.h"
 #include "display.h"
+#include "ctrl.h"
 
-//
-// Internal Header Files
-//
-#include "common.h"
-#include "runtime.h"
-#include "acpi.h"
-#include "interrupt.h"
-
-//
-// Public Source Files
-//
-#include "ctrl.c"
-#include "core.c"
-#include "display.c"
-
-//
-// Internal Source Files
-//
-#include "runtime.c"
-#include "acpi.c"
-#include "interrupt.c"
+#include "interrupt/interrupt.h"
+#include "acpi/acpi.h"
 
 static
 u32 print_string(const u32 x, const u32 y, const char *text) {
@@ -79,7 +57,6 @@ void app(void) {
         os_display_clear(' ', OS_DISPLAY_White);
         const u32 cursor = print_string(0, 0, "Seconds passed: ");
         print_number(cursor, 0, seconds_passed);
-        if(seconds_passed == 2) os_ctrl_exit();
         os_ctrl_sleep(1000000000);
         ++seconds_passed;
     }

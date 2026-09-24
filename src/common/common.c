@@ -1,3 +1,5 @@
+#include "common.h"
+
 typedef struct {
     u32 hi;
     u32 lo;

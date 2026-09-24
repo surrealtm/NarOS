@@ -22,10 +22,10 @@ typedef float f32;
 
 typedef char b8;
 
-const u64 U64_MAX = 0xffffffffffffffff;
-const u32 U32_MAX = 0xffffffff;
-const u16 U16_MAX = 0xffff;
-const u8  U8_MAX = 0xff;
+static const u64 U64_MAX = 0xffffffffffffffff;
+static const u32 U32_MAX = 0xffffffff;
+static const u16 U16_MAX = 0xffff;
+static const u8  U8_MAX = 0xff;
 
 STATIC_ASSERT(sizeof(u64) == 8 && sizeof(s64) == 8);
 STATIC_ASSERT(sizeof(u32) == 4 && sizeof(s32) == 4);

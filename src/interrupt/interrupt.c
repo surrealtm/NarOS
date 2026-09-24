@@ -1,3 +1,6 @@
+#include "interrupt.h"
+#include "common/common.h"
+
 /* ----------------------------------------------- Interrupts ----------------------------------------------- */
 
 #define INTERRUPT_DESCRIPTOR_COUNT 256

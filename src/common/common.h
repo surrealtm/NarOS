@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core.h"
+
 #define packed_struct __attribute__((packed))
 
 /**

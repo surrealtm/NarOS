@@ -1,3 +1,7 @@
+#include "ctrl.h"
+#include "interrupt/interrupt.h"
+#include "acpi/acpi.h"
+
 static b8 exit_requested = false;
 
 void os_ctrl_sleep(const u64 nanoseconds) {
