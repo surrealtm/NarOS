@@ -1,6 +1,6 @@
 #include "acpi.h"
 #include "ctrl.h"
-#include "interrupt/interrupt.h"
+#include "port/port.h"
 
 typedef struct Fixed_ACPI_Description_Table {
     s8 signature[4];
@@ -166,7 +166,7 @@ b8 is_valid_aml_signature(const char *address) {
 static
 b8 wait_for_configured_port(const u32 *port) {
     for(int i = 0; i < 300; ++i) {
-        if((read_input_port_u16((u16) (u32) port) & data.sci_en) == 1) {
+        if((port_read_u16((u16) (u32) port) & data.sci_en) == 1) {
             return true;
         }
         os_ctrl_sleep(10000000);
@@ -181,7 +181,7 @@ b8 enable_acpi(void) {
         return false;
     }
 
-    write_output_port_u16((u16) (u32) data.smi_cmd, data.acpi_enable);
+    port_write_u16((u16) (u32) data.smi_cmd, data.acpi_enable);
     return wait_for_configured_port(data.pm1a_cnt) && (data.pm1b_cnt == 0 || wait_for_configured_port(data.pm1b_cnt));
 }
 
@@ -253,9 +253,9 @@ b8 acpi_shut_down(void) {
     }
 
     // Send the actual shutdown command
-    write_output_port_u16((u16) (u32) data.pm1a_cnt, data.slp_typa | data.slp_en);
+    port_write_u16((u16) (u32) data.pm1a_cnt, data.slp_typa | data.slp_en);
     if(data.pm1b_cnt != 0) {
-        write_output_port_u16((u16) (u32) data.pm1b_cnt, data.slp_typb | data.slp_en);
+        port_write_u16((u16) (u32) data.pm1b_cnt, data.slp_typb | data.slp_en);
     }
 
     // If we've gotten this far... It hasn't worked.

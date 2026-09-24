@@ -2,22 +2,14 @@
 
 #include "base.h"
 
-/* ----------------------------------------------- Interrupts ----------------------------------------------- */
-
 typedef void (*Interrupt_Callback)(void);
 
 typedef enum Interrupt_Signal {
     INTERRUPT_SIGNAL_Timer = 0x20,
 } Interrupt_Signal;
 
-void write_output_port_u8(u16 port, u8 value);
-void write_output_port_u16(u16 port, u16 value);
-u16 read_input_port_u16(u16 port);
-void initialize_interrupt_handlers(void);
-void register_interrupt_callback(Interrupt_Signal signal, Interrupt_Callback callback);
+void interrupt_initialize(void);
+void interrupt_register_callback(Interrupt_Signal signal, Interrupt_Callback callback);
+u64 interrupt_get_tick(void);
+u64 interrupt_ticks_from_nanoseconds(u64 nanoseconds);
 
-/* ------------------------------------------------- Timing ------------------------------------------------- */
-
-void initialize_tick_counter(void);
-u64 current_tick_counter(void);
-u64 ticks_from_nanoseconds(u64 nanoseconds);

@@ -67,8 +67,7 @@ void app(void) {
  * the kernel.
  */
 int kernel_entry_point(void) {
-    initialize_interrupt_handlers();
-    initialize_tick_counter();
+    interrupt_initialize();
     acpi_initialize();
     app();
     os_ctrl_shut_down();
