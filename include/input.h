@@ -6,6 +6,7 @@ typedef enum OS_Input_Event_Kind {
     OS_INPUT_EVENT_KIND_Keyboard,
 } OS_Input_Event_Kind;
 
+// @Incomplete: Support extended scan codes, e.g. for arrow keys, right alt, etc.
 typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_Unknown,
 
@@ -35,12 +36,16 @@ typedef enum OS_Input_Key_Code {
     /* Printable Special Characters */
     OS_INPUT_KEY_Space,
     OS_INPUT_KEY_Minus,
+    OS_INPUT_KEY_Multiply,
     OS_INPUT_KEY_Equals,
     OS_INPUT_KEY_Brace_Open,
     OS_INPUT_KEY_Brace_Close,
+    OS_INPUT_KEY_Bracket_Open,
+    OS_INPUT_KEY_Bracket_Close,
     OS_INPUT_KEY_Backslash,
     OS_INPUT_KEY_Semicolon,
-    OS_INPUT_KEY_Quote,
+    OS_INPUT_KEY_Single_Quote,
+    OS_INPUT_KEY_Double_Quote,
     OS_INPUT_KEY_Backtick,
     OS_INPUT_KEY_Comma,
     OS_INPUT_KEY_Dot,
