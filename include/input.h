@@ -8,27 +8,19 @@ typedef enum OS_Input_Event_Kind {
 
 typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_Unknown,
+
+    /* Non Printable Characters */
     OS_INPUT_KEY_Escape,
-    OS_INPUT_KEY_Minus,
-    OS_INPUT_KEY_Equals,
+    OS_INPUT_KEY_Enter,
     OS_INPUT_KEY_Backspace,
     OS_INPUT_KEY_Tab,
-    OS_INPUT_KEY_Brace_Open,
-    OS_INPUT_KEY_Brace_Close,
-    OS_INPUT_KEY_Enter,
     OS_INPUT_KEY_Left_Control,
-    OS_INPUT_KEY_Backslash,
-    OS_INPUT_KEY_Semicolon,
-    OS_INPUT_KEY_Quote,
-    OS_INPUT_KEY_Backtick,
     OS_INPUT_KEY_Left_Shift,
-    OS_INPUT_KEY_Comma,
-    OS_INPUT_KEY_Dot,
-    OS_INPUT_KEY_Slash,
     OS_INPUT_KEY_Right_Shift,
     OS_INPUT_KEY_Left_Alt,
-    OS_INPUT_KEY_Space,
     OS_INPUT_KEY_Caps_Lock,
+    OS_INPUT_KEY_Num_Lock,
+    OS_INPUT_KEY_Scroll_Lock,
     OS_INPUT_KEY_F1,
     OS_INPUT_KEY_F2,
     OS_INPUT_KEY_F3,
@@ -39,8 +31,22 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_F8,
     OS_INPUT_KEY_F9,
     OS_INPUT_KEY_F10,
-    OS_INPUT_KEY_Num_Lock,
-    OS_INPUT_KEY_Scroll_Lock,
+
+    /* Printable Special Characters */
+    OS_INPUT_KEY_Space,
+    OS_INPUT_KEY_Minus,
+    OS_INPUT_KEY_Equals,
+    OS_INPUT_KEY_Brace_Open,
+    OS_INPUT_KEY_Brace_Close,
+    OS_INPUT_KEY_Backslash,
+    OS_INPUT_KEY_Semicolon,
+    OS_INPUT_KEY_Quote,
+    OS_INPUT_KEY_Backtick,
+    OS_INPUT_KEY_Comma,
+    OS_INPUT_KEY_Dot,
+    OS_INPUT_KEY_Slash,
+
+    /* Latin Characters */
     OS_INPUT_KEY_0,
     OS_INPUT_KEY_1,
     OS_INPUT_KEY_2,
@@ -77,6 +83,8 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_X,
     OS_INPUT_KEY_Y,
     OS_INPUT_KEY_Z,
+
+    /* Terminator */
     OS_INPUT_KEY_COUNT,
 } OS_Input_Key_Code;
 

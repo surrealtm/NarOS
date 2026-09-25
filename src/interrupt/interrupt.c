@@ -45,8 +45,8 @@ void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 seg
 
 static
 b8 has_interrupt_handler(const u8 signal) {
-    const void *handler = (void *) (((u32) interrupt_descriptor_table[signal].base_hi << 16) | interrupt_descriptor_table[signal].base_lo);
-    return handler != (void *) interrupt_dummy_master && handler != (void *) interrupt_dummy_slave;
+    const u32 handler = (((u32) interrupt_descriptor_table[signal].base_hi << 16) | interrupt_descriptor_table[signal].base_lo);
+    return handler != (u32) interrupt_dummy_master && handler != (u32) interrupt_dummy_slave;
 }
 
 static
