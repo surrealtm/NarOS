@@ -19,7 +19,11 @@ void app(void) {
         while(os_input_pop_event(&event)) {
             if(event.kind == OS_INPUT_EVENT_KIND_Keyboard && event.data.keyboard.down) {
                 if(event.data.keyboard.ascii != 0) {
-                    os_display_set_character(cursor_x, 0, event.data.keyboard.ascii, OS_DISPLAY_White);
+                    u8 drawn_ascii = event.data.keyboard.ascii;
+                    if(event.data.keyboard.ascii >= 'A' && event.data.keyboard.ascii <= 'Z' && !event.data.keyboard.shift_down) {
+                        drawn_ascii = drawn_ascii - 'A' + 'a';
+                    }
+                    os_display_set_character(cursor_x, 0, drawn_ascii, OS_DISPLAY_White);
                     ++cursor_x;
                 } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Backspace) {
                     --cursor_x;

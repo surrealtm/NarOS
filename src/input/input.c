@@ -66,10 +66,11 @@ void keyboard_interrupt_handler(void) {
 
     if(normalized_scan_code > 0 && normalized_scan_code < ARRAY_COUNT(active_scan_code_table->per_scan_code)) {
         const OS_Input_Key_Code key_code = read_key_code(active_scan_code_table->per_scan_code[normalized_scan_code]);
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down };
+        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down, keyboard_state.shift_down, keyboard_state.altgr_down };
         push_event(make_keyboard_event(keyboard_event));
 
         switch(key_code) {
+            // @Incomplete: Caps lock is not taken into account here
             case OS_INPUT_KEY_Left_Shift:
             case OS_INPUT_KEY_Right_Shift:
                 keyboard_state.shift_down = down;

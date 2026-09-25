@@ -114,6 +114,8 @@ typedef struct OS_Input_Keyboard_Event {
     OS_Input_Key_Code key_code;
     u8 ascii;
     b8 down;
+    b8 shift_down;
+    b8 altgr_down;
 } OS_Input_Keyboard_Event;
 
 typedef struct OS_Input_Event {
