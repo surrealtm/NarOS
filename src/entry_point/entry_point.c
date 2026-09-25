@@ -2,6 +2,7 @@
 #include "display.h"
 #include "ctrl.h"
 
+#include "input/input_kernel.h"
 #include "interrupt/interrupt.h"
 #include "acpi/acpi.h"
 
@@ -68,6 +69,7 @@ void app(void) {
  */
 int kernel_entry_point(void) {
     interrupt_initialize();
+    input_initialize();
     acpi_initialize();
     app();
     os_ctrl_shut_down();
