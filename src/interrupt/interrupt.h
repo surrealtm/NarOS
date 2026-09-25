@@ -5,7 +5,8 @@
 typedef void (*Interrupt_Callback)(void);
 
 typedef enum Interrupt_Signal {
-    INTERRUPT_SIGNAL_Timer = 0x20,
+    INTERRUPT_SIGNAL_Timer   = 0x20,
+    INTERRUPT_SIGNAL_Keyboard = 0x21,
 } Interrupt_Signal;
 
 void interrupt_initialize(void);
