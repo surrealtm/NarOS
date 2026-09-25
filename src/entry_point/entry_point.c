@@ -22,8 +22,8 @@ void app(void) {
                     os_display_set_character(cursor_x, 0, event.data.keyboard.ascii, OS_DISPLAY_White);
                     ++cursor_x;
                 } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Backspace) {
-                    os_display_set_character(cursor_x, 0, ' ', OS_DISPLAY_White);
                     --cursor_x;
+                    os_display_set_character(cursor_x, 0, ' ', OS_DISPLAY_White);
                 }
             }
         }
