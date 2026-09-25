@@ -92,5 +92,13 @@ typedef struct OS_Input_Event {
     } data;
 } OS_Input_Event;
 
+/**
+ * Checks if there's currently any input event available to be popped
+ */
 b8 os_input_has_event(void);
+
+/**
+ * If any input event is available, that event is written into the passed pointer and true is returned.
+ * Otherwise, the pointer is untouched and false is returned.
+ */
 b8 os_input_pop_event(OS_Input_Event *event);

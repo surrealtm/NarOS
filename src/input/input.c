@@ -3,6 +3,7 @@
 #include "interrupt/interrupt.h"
 #include "port/port.h"
 
+#define EVENT_QUEUE_CAPACITY 128
 #define SUPPORTED_SCAN_CODE_COUNT 0x47
 
 // Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
@@ -81,17 +82,38 @@ OS_Input_Key_Code scan_code_table[SUPPORTED_SCAN_CODE_COUNT] = {
     OS_INPUT_KEY_Scroll_Lock,
 };
 
+typedef struct Event_Buffer {
+    OS_Input_Event data[EVENT_QUEUE_CAPACITY];
+    u32 read_idx;
+    u32 write_idx;
+} Event_Buffer;
+
+static Event_Buffer event_buffer;
+
+static
+u32 advance_index(const u32 idx) {
+    return (idx + 1) % ARRAY_COUNT(event_buffer.data);
+}
+
+static
+void push_event(const OS_Input_Event event) {
+    event_buffer.data[event_buffer.write_idx] = event;
+    event_buffer.write_idx = advance_index(event_buffer.write_idx);
+    if(event_buffer.read_idx == event_buffer.write_idx) {
+        // We've caught back up to the read index, as the reader was too slow.
+        // The new value in the `read_idx` is now the *latest* event, but the read index should
+        // point at the oldest event in the queue, therefore we forcefully advance the read index here -
+        // basically implicitly popping the last event from the queue
+        event_buffer.read_idx = advance_index(event_buffer.read_idx);
+    }
+}
+
 static
 OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
     OS_Input_Event event;
     event.kind = OS_INPUT_EVENT_KIND_Keyboard;
     event.data.keyboard = keyboard;
     return event;
-}
-
-static
-void push_event(const OS_Input_Event event) {
-    (void) event;
 }
 
 static
@@ -113,10 +135,15 @@ void input_initialize(void) {
 }
 
 b8 os_input_has_event(void) {
-    return false;
+    return event_buffer.read_idx != event_buffer.write_idx;
 }
 
 b8 os_input_pop_event(OS_Input_Event *event) {
-    (void) event;
-    return false;
+    if(!os_input_has_event()) {
+        return false;
+    }
+
+    *event = event_buffer.data[event_buffer.read_idx];
+    event_buffer.read_idx = advance_index(event_buffer.read_idx);
+    return true;
 }
