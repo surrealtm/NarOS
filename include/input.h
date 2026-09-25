@@ -77,10 +77,12 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_X,
     OS_INPUT_KEY_Y,
     OS_INPUT_KEY_Z,
+    OS_INPUT_KEY_COUNT,
 } OS_Input_Key_Code;
 
 typedef struct OS_Input_Keyboard_Event {
     OS_Input_Key_Code key_code;
+    u8 ascii;
     b8 down;
 } OS_Input_Keyboard_Event;
 

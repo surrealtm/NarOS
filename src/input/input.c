@@ -5,6 +5,7 @@
 
 #define EVENT_QUEUE_CAPACITY 128
 #define SUPPORTED_SCAN_CODE_COUNT 0x47
+#define NON_PRINTABLE_CHARACTER 0
 
 // Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
 static
@@ -82,6 +83,80 @@ OS_Input_Key_Code scan_code_table[SUPPORTED_SCAN_CODE_COUNT] = {
     OS_INPUT_KEY_Scroll_Lock,
 };
 
+static
+u8 ascii_table[OS_INPUT_KEY_COUNT] = {
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    '-',
+    '=',
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    '{',
+    '}',
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    '\\',
+    ';',
+    '"',
+    '`',
+    NON_PRINTABLE_CHARACTER,
+    ',',
+    '.',
+    '/',
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    ' ',
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    NON_PRINTABLE_CHARACTER,
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+};
+
 typedef struct Event_Buffer {
     OS_Input_Event data[EVENT_QUEUE_CAPACITY];
     u32 read_idx;
@@ -125,7 +200,7 @@ void keyboard_interrupt_handler(void) {
 
     if(normalized_scan_code > 0 && normalized_scan_code < ARRAY_COUNT(scan_code_table)) {
         const OS_Input_Key_Code key_code = scan_code_table[normalized_scan_code];
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, down };
+        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_table[key_code], down };
         push_event(make_keyboard_event(keyboard_event));
     }
 }
