@@ -12,17 +12,16 @@
  */
 typedef struct Scan_Code_Mapping {
     OS_Input_Key_Code normal;
-/*
     OS_Input_Key_Code shift;
     OS_Input_Key_Code altgr;
-    */
 } Scan_Code_Mapping;
 
 typedef struct Scan_Code_Table {
     Scan_Code_Mapping per_scan_code[SUPPORTED_SCAN_CODE_COUNT];
 } Scan_Code_Table;
 
-// @Incomplete: Missing arrow keys...
+// @Incomplete: Missing a german table, and an API to toggle the keyboard layout
+
 static const Scan_Code_Table scan_code_table_en = {
     .per_scan_code = {
         [0x00] = { .normal = OS_INPUT_KEY_Unknown },

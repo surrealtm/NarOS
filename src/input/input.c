@@ -12,7 +12,13 @@ typedef struct Event_Buffer {
     u32 write_idx;
 } Event_Buffer;
 
+typedef struct Keyboard_State {
+    b8 shift_down;
+    b8 altgr_down;
+} Keyboard_State;
+
 static Event_Buffer event_buffer;
+static Keyboard_State keyboard_state;
 static const Scan_Code_Table * const active_scan_code_table = &scan_code_table_en;
 
 static
@@ -42,15 +48,42 @@ OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
 }
 
 static
+OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
+    if(keyboard_state.altgr_down) {
+        return mapping.altgr;
+    } else if(keyboard_state.shift_down) {
+        return mapping.shift;
+    } else {
+        return mapping.normal;
+    }
+}
+
+static
 void keyboard_interrupt_handler(void) {
     const u8 scan_code = port_read_u8(0x60);
     const b8 down = (scan_code & 0x80) == 0;
     const u8 normalized_scan_code = scan_code & 0x7f;
 
     if(normalized_scan_code > 0 && normalized_scan_code < ARRAY_COUNT(active_scan_code_table->per_scan_code)) {
-        const OS_Input_Key_Code key_code = active_scan_code_table->per_scan_code[normalized_scan_code].normal;
+        const OS_Input_Key_Code key_code = read_key_code(active_scan_code_table->per_scan_code[normalized_scan_code]);
         const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down };
         push_event(make_keyboard_event(keyboard_event));
+
+        switch(key_code) {
+            case OS_INPUT_KEY_Left_Shift:
+            case OS_INPUT_KEY_Right_Shift:
+                keyboard_state.shift_down = down;
+                break;
+
+            /* @Incomplete: Right alt key is not currently parsed
+            case OS_INPUT_KEY_Right_Alt:
+                keyboard_state.altgr_down = down;
+                break;
+            */
+
+            default:
+                break;
+        }
     }
 }
 
