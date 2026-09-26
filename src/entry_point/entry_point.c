@@ -38,6 +38,10 @@ void app(void) {
                             break;
                         }
 
+                        os_display_set_character(cursor_x, 0, ' ', OS_DISPLAY_White);
+                        ++cursor_x;
+                        break;
+
                     default:
                         if(event.data.keyboard.ascii == 0) break;
                         u8 drawn_ascii = event.data.keyboard.ascii;
