@@ -111,17 +111,41 @@ void print_unsigned_integer(Terminal *terminal, u64 integer, const OS_Display_Co
 }
 
 static
+u32 blit_input_string_to_screen(const char *input_string, u32 cursor_offset) {
+    const OS_Display_Color color = OS_DISPLAY_Bright_White;
+    while(*input_string) {
+        os_display_set_character(cursor_offset % BACKLOG_WIDTH, BACKLOG_HEIGHT - (cursor_offset / BACKLOG_WIDTH + 1), *input_string, color);
+        ++input_string;
+        ++cursor_offset;
+    }
+    return cursor_offset;
+}
+
+static
 void blit_to_screen(const Terminal *terminal) {
+    os_display_clear(' ', OS_DISPLAY_White);
+
+    const char *text_input_prefix = ">> ";
+    u32 input_string_offset = 0;
+    input_string_offset = blit_input_string_to_screen(text_input_prefix, 0);
+    input_string_offset = blit_input_string_to_screen(terminal->text_input.buffer, input_string_offset);
+
+    const u32 text_input_line_count = input_string_offset / BACKLOG_WIDTH + 1;
+
+    {
+        const u32 input_cursor_x = input_string_offset % BACKLOG_WIDTH;
+        const u32 input_cursor_y = BACKLOG_HEIGHT - text_input_line_count;
+        os_display_set_character(input_cursor_x, input_cursor_y, ' ', OS_DISPLAY_White);
+        os_display_set_cursor_position(input_cursor_x, input_cursor_y);
+    }
+
     // @Speed: We could just memcpy this into the video memory...
-    for(u32 y = 0; y < BACKLOG_HEIGHT; ++y) {
+    for(u32 y = text_input_line_count; y < BACKLOG_HEIGHT - text_input_line_count; ++y) {
         for(u32 x = 0; x < BACKLOG_WIDTH; ++x) {
             const Cell cell = query_cell(terminal, x, y);
             os_display_set_character(x, y, cell.character, cell.color);
         }
     }
-
-    os_display_set_character(terminal->backlog_cursor_x, terminal->backlog_cursor_y, ' ', OS_DISPLAY_White);
-    os_display_set_cursor_position(terminal->backlog_cursor_x, terminal->backlog_cursor_y);
 }
 
 static
@@ -129,12 +153,11 @@ void wait_for_input(void) {
     while(!os_input_has_event()) {
         os_ctrl_halt();
     }
-    OS_Input_Event event;
-    os_input_pop_event(&event);
 }
 
 void terminal_enter(void) {
     Terminal terminal = { 0 };
+    terminal.backlog_cursor_y = BACKLOG_HEIGHT - 1;
 
     (void) print_unsigned_integer;
 
@@ -145,7 +168,17 @@ void terminal_enter(void) {
 
     while(true) {
         blit_to_screen(&terminal);
-        text_input_update(&terminal.text_input);
-        wait_for_input();
+        const Text_Input_Signal text_input_signal = text_input_update(&terminal.text_input);
+        switch(text_input_signal) {
+            case TEXT_INPUT_SIGNAL_None:
+                wait_for_input();
+                break;
+            case TEXT_INPUT_SIGNAL_Entered:
+                print_string(&terminal, "> ", OS_DISPLAY_White);
+                print_string(&terminal, terminal.text_input.buffer, OS_DISPLAY_White);
+                print_string(&terminal, "\n", OS_DISPLAY_White);
+                text_input_clear(&terminal.text_input);
+                break;
+        }
     }
 }

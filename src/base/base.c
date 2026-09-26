@@ -12,7 +12,7 @@ void move_memory(void *dst, const void *src, const u32 size_in_bytes) {
             ((u8 *) dst)[i] = ((u8 *) src)[i];
         }
     } else {
-        for(s64 i = (s64) (size_in_bytes - 1); i >= 0; --i) {
+        for(s64 i = (s64) size_in_bytes - 1; i >= 0; --i) {
             ((u8 *) dst)[i] = ((u8 *) src)[i];
         }
     }
