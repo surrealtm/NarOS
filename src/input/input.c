@@ -21,7 +21,7 @@ typedef struct Keyboard_State {
 
 static Event_Buffer event_buffer;
 static Keyboard_State keyboard_state;
-static const Scan_Code_Table * const active_scan_code_table = &scan_code_table_en;
+static const Scan_Code_Table * const active_scan_code_table = &scan_code_table_de;
 
 static
 u32 advance_index(const u32 idx) {

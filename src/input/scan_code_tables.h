@@ -3,7 +3,7 @@
 #include "input.h"
 #include "base.h"
 
-#define SUPPORTED_SCAN_CODE_COUNT 0x54
+#define SUPPORTED_SCAN_CODE_COUNT 0x57
 #define NON_PRINTABLE_CHARACTER 0
 
 /**
@@ -23,6 +23,7 @@ typedef struct Scan_Code_Table {
 
 // @Incomplete: Missing a german table, and an API to toggle the keyboard layout
 
+// Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
 static const Scan_Code_Table scan_code_table_en = {
     .ordinary = {
         [0x00] = { .normal = OS_INPUT_KEY_Unknown,       .shift = OS_INPUT_KEY_Unknown,           .alt = OS_INPUT_KEY_Unknown },
@@ -109,7 +110,93 @@ static const Scan_Code_Table scan_code_table_en = {
     },
 };
 
-// Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
+static const Scan_Code_Table scan_code_table_de = {
+    .ordinary = {
+        [0x00] = { .normal = OS_INPUT_KEY_Unknown,       .shift = OS_INPUT_KEY_Unknown,           .alt = OS_INPUT_KEY_Unknown },
+        [0x01] = { .normal = OS_INPUT_KEY_Escape,        .shift = OS_INPUT_KEY_Escape,            .alt = OS_INPUT_KEY_Escape },
+        [0x02] = { .normal = OS_INPUT_KEY_1,             .shift = OS_INPUT_KEY_Exclamation_Mark,  .alt = OS_INPUT_KEY_1 },
+        [0x03] = { .normal = OS_INPUT_KEY_2,             .shift = OS_INPUT_KEY_Double_Quote,      .alt = OS_INPUT_KEY_2 },
+        [0x04] = { .normal = OS_INPUT_KEY_3,             .shift = OS_INPUT_KEY_Section,           .alt = OS_INPUT_KEY_3 },
+        [0x05] = { .normal = OS_INPUT_KEY_4,             .shift = OS_INPUT_KEY_Dollar,            .alt = OS_INPUT_KEY_4 },
+        [0x06] = { .normal = OS_INPUT_KEY_5,             .shift = OS_INPUT_KEY_Percent,           .alt = OS_INPUT_KEY_5 },
+        [0x07] = { .normal = OS_INPUT_KEY_6,             .shift = OS_INPUT_KEY_Ampersand,         .alt = OS_INPUT_KEY_6 },
+        [0x08] = { .normal = OS_INPUT_KEY_7,             .shift = OS_INPUT_KEY_Slash,             .alt = OS_INPUT_KEY_Brace_Open },
+        [0x09] = { .normal = OS_INPUT_KEY_8,             .shift = OS_INPUT_KEY_Parenthesis_Open,  .alt = OS_INPUT_KEY_Bracket_Open },
+        [0x0A] = { .normal = OS_INPUT_KEY_9,             .shift = OS_INPUT_KEY_Parenthesis_Close, .alt = OS_INPUT_KEY_Bracket_Close },
+        [0x0B] = { .normal = OS_INPUT_KEY_0,             .shift = OS_INPUT_KEY_Equals,            .alt = OS_INPUT_KEY_Brace_Close },
+        [0x0C] = { .normal = OS_INPUT_KEY_Sharp_S,       .shift = OS_INPUT_KEY_Question_Mark,     .alt = OS_INPUT_KEY_Backslash },
+        [0x0D] = { .normal = OS_INPUT_KEY_Acute_Accent,  .shift = OS_INPUT_KEY_Backtick,          .alt = OS_INPUT_KEY_Acute_Accent },
+        [0x0E] = { .normal = OS_INPUT_KEY_Backspace,     .shift = OS_INPUT_KEY_Backspace,         .alt = OS_INPUT_KEY_Backspace },
+        [0x0F] = { .normal = OS_INPUT_KEY_Tab,           .shift = OS_INPUT_KEY_Tab,               .alt = OS_INPUT_KEY_Tab },
+        [0x10] = { .normal = OS_INPUT_KEY_Q,             .shift = OS_INPUT_KEY_Q,                 .alt = OS_INPUT_KEY_At },
+        [0x11] = { .normal = OS_INPUT_KEY_W,             .shift = OS_INPUT_KEY_W,                 .alt = OS_INPUT_KEY_W },
+        [0x12] = { .normal = OS_INPUT_KEY_E,             .shift = OS_INPUT_KEY_E,                 .alt = OS_INPUT_KEY_E },
+        [0x13] = { .normal = OS_INPUT_KEY_R,             .shift = OS_INPUT_KEY_R,                 .alt = OS_INPUT_KEY_R },
+        [0x14] = { .normal = OS_INPUT_KEY_T,             .shift = OS_INPUT_KEY_T,                 .alt = OS_INPUT_KEY_T },
+        [0x15] = { .normal = OS_INPUT_KEY_Z,             .shift = OS_INPUT_KEY_Z,                 .alt = OS_INPUT_KEY_Z },
+        [0x16] = { .normal = OS_INPUT_KEY_U,             .shift = OS_INPUT_KEY_U,                 .alt = OS_INPUT_KEY_U },
+        [0x17] = { .normal = OS_INPUT_KEY_I,             .shift = OS_INPUT_KEY_I,                 .alt = OS_INPUT_KEY_I },
+        [0x18] = { .normal = OS_INPUT_KEY_O,             .shift = OS_INPUT_KEY_O,                 .alt = OS_INPUT_KEY_O },
+        [0x19] = { .normal = OS_INPUT_KEY_P,             .shift = OS_INPUT_KEY_P,                 .alt = OS_INPUT_KEY_P },
+        [0x1A] = { .normal = OS_INPUT_KEY_Umlaut_U,      .shift = OS_INPUT_KEY_Umlaut_U,          .alt = OS_INPUT_KEY_Umlaut_U },
+        [0x1B] = { .normal = OS_INPUT_KEY_Plus,          .shift = OS_INPUT_KEY_Multiply,          .alt = OS_INPUT_KEY_Tilde },
+        [0x1C] = { .normal = OS_INPUT_KEY_Enter,         .shift = OS_INPUT_KEY_Enter,             .alt = OS_INPUT_KEY_Enter },
+        [0x1D] = { .normal = OS_INPUT_KEY_Left_Control,  .shift = OS_INPUT_KEY_Left_Control,      .alt = OS_INPUT_KEY_Left_Control },
+        [0x1E] = { .normal = OS_INPUT_KEY_A,             .shift = OS_INPUT_KEY_A,                 .alt = OS_INPUT_KEY_A },
+        [0x1F] = { .normal = OS_INPUT_KEY_S,             .shift = OS_INPUT_KEY_S,                 .alt = OS_INPUT_KEY_S },
+        [0x20] = { .normal = OS_INPUT_KEY_D,             .shift = OS_INPUT_KEY_D,                 .alt = OS_INPUT_KEY_D },
+        [0x21] = { .normal = OS_INPUT_KEY_F,             .shift = OS_INPUT_KEY_F,                 .alt = OS_INPUT_KEY_F },
+        [0x22] = { .normal = OS_INPUT_KEY_G,             .shift = OS_INPUT_KEY_G,                 .alt = OS_INPUT_KEY_G },
+        [0x23] = { .normal = OS_INPUT_KEY_H,             .shift = OS_INPUT_KEY_H,                 .alt = OS_INPUT_KEY_H },
+        [0x24] = { .normal = OS_INPUT_KEY_J,             .shift = OS_INPUT_KEY_J,                 .alt = OS_INPUT_KEY_J },
+        [0x25] = { .normal = OS_INPUT_KEY_K,             .shift = OS_INPUT_KEY_K,                 .alt = OS_INPUT_KEY_K },
+        [0x26] = { .normal = OS_INPUT_KEY_L,             .shift = OS_INPUT_KEY_L,                 .alt = OS_INPUT_KEY_L },
+        [0x27] = { .normal = OS_INPUT_KEY_Umlaut_O,      .shift = OS_INPUT_KEY_Umlaut_O,          .alt = OS_INPUT_KEY_Umlaut_O },
+        [0x28] = { .normal = OS_INPUT_KEY_Umlaut_A,      .shift = OS_INPUT_KEY_Umlaut_A,          .alt = OS_INPUT_KEY_Umlaut_A },
+        [0x29] = { .normal = OS_INPUT_KEY_Caret,         .shift = OS_INPUT_KEY_Caret,             .alt = OS_INPUT_KEY_Caret },
+        [0x2A] = { .normal = OS_INPUT_KEY_Left_Shift,    .shift = OS_INPUT_KEY_Left_Shift,        .alt = OS_INPUT_KEY_Left_Shift },
+        [0x2B] = { .normal = OS_INPUT_KEY_Number_Sign,   .shift = OS_INPUT_KEY_Single_Quote,      .alt = OS_INPUT_KEY_Number_Sign },
+        [0x2C] = { .normal = OS_INPUT_KEY_Y,             .shift = OS_INPUT_KEY_Y,                 .alt = OS_INPUT_KEY_Y },
+        [0x2D] = { .normal = OS_INPUT_KEY_X,             .shift = OS_INPUT_KEY_X,                 .alt = OS_INPUT_KEY_X },
+        [0x2E] = { .normal = OS_INPUT_KEY_C,             .shift = OS_INPUT_KEY_C,                 .alt = OS_INPUT_KEY_C },
+        [0x2F] = { .normal = OS_INPUT_KEY_V,             .shift = OS_INPUT_KEY_V,                 .alt = OS_INPUT_KEY_V },
+        [0x30] = { .normal = OS_INPUT_KEY_B,             .shift = OS_INPUT_KEY_B,                 .alt = OS_INPUT_KEY_B },
+        [0x31] = { .normal = OS_INPUT_KEY_N,             .shift = OS_INPUT_KEY_N,                 .alt = OS_INPUT_KEY_N },
+        [0x32] = { .normal = OS_INPUT_KEY_M,             .shift = OS_INPUT_KEY_M,                 .alt = OS_INPUT_KEY_M },
+        [0x33] = { .normal = OS_INPUT_KEY_Comma,         .shift = OS_INPUT_KEY_Semicolon,         .alt = OS_INPUT_KEY_Comma },
+        [0x34] = { .normal = OS_INPUT_KEY_Dot,           .shift = OS_INPUT_KEY_Colon,             .alt = OS_INPUT_KEY_Dot },
+        [0x35] = { .normal = OS_INPUT_KEY_Minus,         .shift = OS_INPUT_KEY_Underscore,        .alt = OS_INPUT_KEY_Minus },
+        [0x36] = { .normal = OS_INPUT_KEY_Right_Shift,   .shift = OS_INPUT_KEY_Right_Shift,       .alt = OS_INPUT_KEY_Right_Shift },
+        [0x37] = { .normal = OS_INPUT_KEY_Multiply,      .shift = OS_INPUT_KEY_Multiply,          .alt = OS_INPUT_KEY_Multiply },
+        [0x38] = { .normal = OS_INPUT_KEY_Left_Alt,      .shift = OS_INPUT_KEY_Left_Alt,          .alt = OS_INPUT_KEY_Left_Alt },
+        [0x39] = { .normal = OS_INPUT_KEY_Space,         .shift = OS_INPUT_KEY_Space,             .alt = OS_INPUT_KEY_Space },
+        [0x3A] = { .normal = OS_INPUT_KEY_Caps_Lock,     .shift = OS_INPUT_KEY_Caps_Lock,         .alt = OS_INPUT_KEY_Caps_Lock },
+        [0x3B] = { .normal = OS_INPUT_KEY_F1,            .shift = OS_INPUT_KEY_F1,                .alt = OS_INPUT_KEY_F1 },
+        [0x3C] = { .normal = OS_INPUT_KEY_F2,            .shift = OS_INPUT_KEY_F2,                .alt = OS_INPUT_KEY_F2 },
+        [0x3D] = { .normal = OS_INPUT_KEY_F3,            .shift = OS_INPUT_KEY_F3,                .alt = OS_INPUT_KEY_F3 },
+        [0x3E] = { .normal = OS_INPUT_KEY_F4,            .shift = OS_INPUT_KEY_F4,                .alt = OS_INPUT_KEY_F4 },
+        [0x3F] = { .normal = OS_INPUT_KEY_F5,            .shift = OS_INPUT_KEY_F5,                .alt = OS_INPUT_KEY_F5 },
+        [0x40] = { .normal = OS_INPUT_KEY_F6,            .shift = OS_INPUT_KEY_F6,                .alt = OS_INPUT_KEY_F6 },
+        [0x41] = { .normal = OS_INPUT_KEY_F7,            .shift = OS_INPUT_KEY_F7,                .alt = OS_INPUT_KEY_F7 },
+        [0x42] = { .normal = OS_INPUT_KEY_F8,            .shift = OS_INPUT_KEY_F8,                .alt = OS_INPUT_KEY_F8 },
+        [0x43] = { .normal = OS_INPUT_KEY_F9,            .shift = OS_INPUT_KEY_F9,                .alt = OS_INPUT_KEY_F9 },
+        [0x44] = { .normal = OS_INPUT_KEY_F10,           .shift = OS_INPUT_KEY_F10,               .alt = OS_INPUT_KEY_F10 },
+        [0x45] = { .normal = OS_INPUT_KEY_Num_Lock,      .shift = OS_INPUT_KEY_Num_Lock,          .alt = OS_INPUT_KEY_Num_Lock },
+        [0x46] = { .normal = OS_INPUT_KEY_Scroll_Lock,   .shift = OS_INPUT_KEY_Scroll_Lock,       .alt = OS_INPUT_KEY_Scroll_Lock },
+        [0x56] = { .normal = OS_INPUT_KEY_Less_Than,     .shift = OS_INPUT_KEY_Greater_Than,      .alt = OS_INPUT_KEY_Vertical_Bar },
+    },
+
+    .escaped = {
+        [0x1d] = { .normal = OS_INPUT_KEY_Right_Control, .shift = OS_INPUT_KEY_Right_Control, .alt = OS_INPUT_KEY_Right_Control },
+        [0x38] = { .normal = OS_INPUT_KEY_Right_Alt,     .shift = OS_INPUT_KEY_Right_Alt,     .alt = OS_INPUT_KEY_Right_Alt },
+        [0x48] = { .normal = OS_INPUT_KEY_Arrow_Up,      .shift = OS_INPUT_KEY_Arrow_Up,      .alt = OS_INPUT_KEY_Arrow_Up },
+        [0x4b] = { .normal = OS_INPUT_KEY_Arrow_Left,    .shift = OS_INPUT_KEY_Arrow_Left,    .alt = OS_INPUT_KEY_Arrow_Left },
+        [0x4d] = { .normal = OS_INPUT_KEY_Arrow_Right,   .shift = OS_INPUT_KEY_Arrow_Right,   .alt = OS_INPUT_KEY_Arrow_Right },
+        [0x50] = { .normal = OS_INPUT_KEY_Arrow_Down,    .shift = OS_INPUT_KEY_Arrow_Down,    .alt = OS_INPUT_KEY_Arrow_Down },
+        [0x53] = { .normal = OS_INPUT_KEY_Delete,        .shift = OS_INPUT_KEY_Delete,        .alt = OS_INPUT_KEY_Delete },
+    },
+};
+
 static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Unknown] = NON_PRINTABLE_CHARACTER,
 
@@ -151,6 +238,7 @@ static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Exclamation_Mark] = '!',
     [OS_INPUT_KEY_At] = '@',
     [OS_INPUT_KEY_Number_Sign] = '#',
+    [OS_INPUT_KEY_Section] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Dollar] = '$',
     [OS_INPUT_KEY_Percent] = '%',
     [OS_INPUT_KEY_Caret] = '^',
@@ -177,6 +265,12 @@ static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Greater_Than] = '>',
     [OS_INPUT_KEY_Slash] = '/',
     [OS_INPUT_KEY_Question_Mark] = '?',
+
+    /* German Keys */
+    [OS_INPUT_KEY_Sharp_S]  = 'S',
+    [OS_INPUT_KEY_Umlaut_A] = 'A',
+    [OS_INPUT_KEY_Umlaut_O] = 'O',
+    [OS_INPUT_KEY_Umlaut_U] = 'U',
 
     /* Latin Characters */
     [OS_INPUT_KEY_0] = '0',

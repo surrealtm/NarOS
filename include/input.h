@@ -48,6 +48,7 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_Exclamation_Mark,
     OS_INPUT_KEY_At,
     OS_INPUT_KEY_Number_Sign,
+    OS_INPUT_KEY_Section,
     OS_INPUT_KEY_Dollar,
     OS_INPUT_KEY_Percent,
     OS_INPUT_KEY_Caret,
@@ -74,6 +75,13 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_Greater_Than,
     OS_INPUT_KEY_Slash,
     OS_INPUT_KEY_Question_Mark,
+    OS_INPUT_KEY_Acute_Accent,
+
+    /* German Keys */
+    OS_INPUT_KEY_Sharp_S,
+    OS_INPUT_KEY_Umlaut_A,
+    OS_INPUT_KEY_Umlaut_O,
+    OS_INPUT_KEY_Umlaut_U,
 
     /* Latin Characters */
     OS_INPUT_KEY_0,
