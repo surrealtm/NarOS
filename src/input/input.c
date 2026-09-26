@@ -67,7 +67,8 @@ void keyboard_interrupt_handler(void) {
     const u8 normalized_scan_code = scan_code & 0x7f;
 
     if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
-        const OS_Input_Key_Code key_code = read_key_code(active_scan_code_table->ordinary[normalized_scan_code]);
+        const Scan_Code_Mapping *active_table = (keyboard_state.in_escaped_mode) ? active_scan_code_table->escaped : active_scan_code_table->ordinary;
+        const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
         const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down, keyboard_state.shift_down || keyboard_state.caps_lock_down, keyboard_state.right_alt_down };
         push_event(make_keyboard_event(keyboard_event));
 
@@ -91,6 +92,8 @@ void keyboard_interrupt_handler(void) {
                 break;
         }
     }
+
+    keyboard_state.in_escaped_mode = scan_code == 0xe0;
 }
 
 void input_initialize(void) {
