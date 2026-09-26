@@ -48,7 +48,7 @@ void advance_cursor_horizontally(Terminal *terminal) {
         ++terminal->cursor_x;
     } else {
         advance_cursor_vertically(terminal);
-        ++terminal->cursor_x;
+        terminal->cursor_x = 0;
     }
 }
 
@@ -117,6 +117,9 @@ void blit_to_screen(const Terminal *terminal) {
             os_display_set_character(x, y, cell.character, cell.color);
         }
     }
+
+    os_display_set_character(terminal->cursor_x, terminal->cursor_y, ' ', OS_DISPLAY_White);
+    os_display_set_cursor_position(terminal->cursor_x, terminal->cursor_y);
 }
 
 static
