@@ -61,6 +61,15 @@ OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
 }
 
 static
+char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_down) {
+    const char ascii = ascii_from_keycode[key_code];
+    if(!shift_down && ascii >= 'A' && ascii <= 'Z') {
+        return ascii - 'A' + 'a';
+    }
+    return ascii;
+}
+
+static
 void keyboard_interrupt_handler(void) {
     const u8 scan_code = port_read_u8(0x60);
     const b8 down = (scan_code & 0x80) == 0;
@@ -69,7 +78,8 @@ void keyboard_interrupt_handler(void) {
     if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
         const Scan_Code_Mapping *active_table = (keyboard_state.in_escaped_mode) ? active_scan_code_table->escaped : active_scan_code_table->ordinary;
         const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down, keyboard_state.shift_down || keyboard_state.caps_lock_down, keyboard_state.right_alt_down };
+        const b8 shift_down = keyboard_state.shift_down || keyboard_state.caps_lock_down;
+        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, read_ascii_from_key_code(key_code, shift_down), down, shift_down, keyboard_state.right_alt_down };
         push_event(make_keyboard_event(keyboard_event));
 
         switch(key_code) {

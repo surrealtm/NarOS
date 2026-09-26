@@ -13,6 +13,17 @@ void write_character(Text_Input *text_input, char character) {
     ++text_input->count;
 }
 
+static
+void remove_character_to_the_left(Text_Input *text_input) {
+    if(text_input->cursor == 0) {
+        return;
+    }
+    move_memory(&text_input->buffer[text_input->cursor], &text_input->buffer[text_input->cursor + 1], text_input->count - text_input->cursor);
+    text_input->buffer[text_input->count - 1] = 0;
+    --text_input->cursor;
+    --text_input->count;
+}
+
 void text_input_initialize(Text_Input *text_input) {
     text_input_clear(text_input);
 }
@@ -33,6 +44,10 @@ Text_Input_Signal text_input_update(Text_Input *text_input) {
         switch(event.data.keyboard.key_code) {
             case OS_INPUT_KEY_Enter:
                 signal = TEXT_INPUT_SIGNAL_Entered;
+                break;
+
+            case OS_INPUT_KEY_Backspace:
+                remove_character_to_the_left(text_input);
                 break;
 
             default:
