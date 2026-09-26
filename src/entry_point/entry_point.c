@@ -31,7 +31,7 @@ void app(void) {
                 }
             }
         }
-        os_ctrl_sleep(1000000);
+        os_ctrl_sleep(10000000);
     }
 }
 
