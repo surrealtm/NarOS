@@ -5,6 +5,11 @@ typedef struct {
     u32 lo;
 } u64_word;
 
+typedef struct {
+    u64 quotient;
+    u64 remainder;
+} Division_Result;
+
 static inline
 u64_word to_word(const u64 in) {
     return (u64_word) { (in >> 32) & 0xffffffff, (in >> 0) & 0xffffffff };
@@ -26,7 +31,8 @@ u32 index_word(const u64_word word, const u64 idx) {
     return mask & 1;
 }
 
-u64 __udivdi3(const u64 dividend, const u64 divisor) {
+static
+Division_Result division_with_mod(const u64 dividend, const u64 divisor) {
     const u64_word dividend_word = to_word(dividend);
     const u64_word divisor_word  = to_word(divisor);
     u64_word quotient_word  = { 0, 0 };
@@ -50,5 +56,21 @@ u64 __udivdi3(const u64 dividend, const u64 divisor) {
         }
     }
 
-    return from_word(quotient_word);
+    return (Division_Result) { from_word(quotient_word), from_word(remainder_word) };
+}
+
+u64 __udivdi3(const u64 dividend, const u64 divisor) {
+    const Division_Result result = division_with_mod(dividend, divisor);
+    return result.quotient;
+}
+
+u64 __udivmoddi4(const u64 dividend, const u64 divisor, u64 *remainder) {
+    const Division_Result result = division_with_mod(dividend, divisor);
+    *remainder = result.remainder;
+    return result.quotient;
+}
+
+u64 __umoddi3(const u64 dividend, const u64 divisor) {
+    const Division_Result result = division_with_mod(dividend, divisor);
+    return result.remainder;
 }
