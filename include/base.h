@@ -38,5 +38,6 @@ STATIC_ASSERT(sizeof(f32) == 4);
 STATIC_ASSERT(sizeof(b8)  == 1);
 
 void set_memory(void *dst, u8 value, u32 size_in_bytes);
+void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 string_length(const char *string);
