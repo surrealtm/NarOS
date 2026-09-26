@@ -21,6 +21,12 @@ To build the kernel, execute the following script in the root directory of this 
 ./build.sh
 ```
 
+To list all available arguments to the build script, run:
+
+```(bash)
+./build.sh --help
+```
+
 If you want to directly run the image using `QEMU`, you can pass an argument:
 
 ```(bash)
@@ -43,6 +49,6 @@ If you want to flash the image onto a USB drive (to run the image on real hardwa
 The `flash_to_disk` script will query which block device you want to flash the image to.
 **Note**: The drive is expected to be using the `FAT` formatting.
 
-#### Building with `Clang`
+#### Building with `GCC`
 
-By default, the `build.sh` script uses `GCC`. You can pass `--clang` as an argument to prefer this compiler. The pipeline in this repository ensures that the kernel builds with both.
+By default, the `build.sh` script uses `CLANG`. You can pass `--gcc` as an argument to prefer this compiler. The pipeline in this repository ensures that the kernel builds with both.

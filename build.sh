@@ -120,6 +120,7 @@ KERNEL_C_SOURCE_FILES=(
     "ctrl/ctrl.c"
     "display/display.c"
     "entry_point/entry_point.c"
+    "input/input.c"
     "interrupt/interrupt.c"
     "math/math.c"
     "port/port.c"

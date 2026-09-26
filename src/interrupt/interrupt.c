@@ -36,10 +36,17 @@ static Interrupt_Callback interrupt_callbacks[INTERRUPT_DESCRIPTOR_COUNT];
 extern void interrupt_dummy_master(void);
 extern void interrupt_dummy_slave(void);
 extern void interrupt_20(void);
+extern void interrupt_21(void);
 
 static
 void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 segment, const u8 flags) {
     interrupt_descriptor_table[signal] = (Interrupt_Descriptor_Table_Entry) { ((base >> 0) & 0xffff), segment, 0, flags, ((base >> 16) & 0xffff) };
+}
+
+static
+b8 has_interrupt_handler(const u8 signal) {
+    const u32 handler = (((u32) interrupt_descriptor_table[signal].base_hi << 16) | interrupt_descriptor_table[signal].base_lo);
+    return handler != (u32) interrupt_dummy_master && handler != (u32) interrupt_dummy_slave;
 }
 
 static
@@ -80,6 +87,7 @@ void setup_interrupt_descriptor_table(void) {
 
     // Install the interrupt handlers we actually care about. Only these will result in a call to `interrupt_handler`.
     install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
+    install_interrupt_descriptor(0x21, (u32) interrupt_21, segment, flags);
 }
 
 static
@@ -127,6 +135,10 @@ void interrupt_register_callback(Interrupt_Signal signal, Interrupt_Callback cal
     if(signal < 0 || signal >= ARRAY_COUNT(interrupt_callbacks)) {
         return;
     }
+    // @Incomplete: Implement a simple assertion function
+    //assert(interrupt_callbacks[signal] == null && "Registered multiple callbacks for the same signal.");
+    //assert(has_interrupt_handler(signal) && "Tried to register a callback for an unhandled signal.");
+    (void) has_interrupt_handler;
     interrupt_callbacks[signal] = callback;
 }
 
