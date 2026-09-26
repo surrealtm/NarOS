@@ -19,3 +19,7 @@ s32 string_length(const char *string) {
     for(count = 0; string[count]; ++count) {}
     return count;
 }
+
+void memset(void *dst, const u8 value, const u32 size_in_bytes) {
+    set_memory(dst, value, size_in_bytes);
+}

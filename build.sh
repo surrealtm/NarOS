@@ -124,6 +124,7 @@ KERNEL_C_SOURCE_FILES=(
     "interrupt/interrupt.c"
     "math/math.c"
     "port/port.c"
+    "terminal/terminal.c"
 )
 
 KERNEL_ASM_SOURCE_FILES=(
