@@ -2,11 +2,15 @@
 
 #include "base.h"
 
+typedef enum OS_Input_Keyboard_Layout {
+    OS_INPUT_KEYBOARD_LAYOUT_Standard_US,
+    OS_INPUT_KEYBOARD_LAYOUT_German,
+} OS_Input_Keyboard_Layout;
+
 typedef enum OS_Input_Event_Kind {
     OS_INPUT_EVENT_KIND_Keyboard,
 } OS_Input_Event_Kind;
 
-// @Incomplete: Support extended scan codes, e.g. for arrow keys, right alt, etc.
 typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_Unknown,
 
@@ -130,7 +134,7 @@ typedef struct OS_Input_Keyboard_Event {
     u8 ascii;
     b8 down;
     b8 shift_down;
-    b8 altgr_down;
+    b8 right_alt_down;
 } OS_Input_Keyboard_Event;
 
 typedef struct OS_Input_Event {
@@ -140,6 +144,11 @@ typedef struct OS_Input_Event {
         OS_Input_Keyboard_Event keyboard;
     } data;
 } OS_Input_Event;
+
+/**
+ * Sets the scan code mapping table to reflect the requested keyboard layout.
+ */
+void os_input_set_keyboard_layout(OS_Input_Keyboard_Layout layout);
 
 /**
  * Checks if there's currently any input event available to be popped

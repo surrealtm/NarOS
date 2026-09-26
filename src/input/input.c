@@ -21,7 +21,7 @@ typedef struct Keyboard_State {
 
 static Event_Buffer event_buffer;
 static Keyboard_State keyboard_state;
-static const Scan_Code_Table * const active_scan_code_table = &scan_code_table_de;
+static const Scan_Code_Table * active_scan_code_table = &scan_code_table_de;
 
 static
 u32 advance_index(const u32 idx) {
@@ -98,6 +98,18 @@ void keyboard_interrupt_handler(void) {
 
 void input_initialize(void) {
     interrupt_register_callback(INTERRUPT_SIGNAL_Keyboard, keyboard_interrupt_handler);
+}
+
+void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
+    switch(layout) {
+        case OS_INPUT_KEYBOARD_LAYOUT_Standard_US:
+            active_scan_code_table = &scan_code_table_en;
+            break;
+
+        case OS_INPUT_KEYBOARD_LAYOUT_German:
+            active_scan_code_table = &scan_code_table_de;
+            break;
+    }
 }
 
 b8 os_input_has_event(void) {

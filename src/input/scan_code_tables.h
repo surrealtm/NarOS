@@ -21,8 +21,6 @@ typedef struct Scan_Code_Table {
     Scan_Code_Mapping escaped[SUPPORTED_SCAN_CODE_COUNT];
 } Scan_Code_Table;
 
-// @Incomplete: Missing a german table, and an API to toggle the keyboard layout
-
 // Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
 static const Scan_Code_Table scan_code_table_en = {
     .ordinary = {
