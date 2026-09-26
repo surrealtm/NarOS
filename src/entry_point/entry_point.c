@@ -25,9 +25,13 @@ void app(void) {
                     }
                     os_display_set_character(cursor_x, 0, drawn_ascii, OS_DISPLAY_White);
                     ++cursor_x;
-                } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Backspace) {
+                } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Backspace && cursor_x > 0) {
                     --cursor_x;
                     os_display_set_character(cursor_x, 0, ' ', OS_DISPLAY_White);
+                } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Arrow_Left && cursor_x > 0) {
+                    --cursor_x;
+                } else if(event.data.keyboard.key_code == OS_INPUT_KEY_Arrow_Right) {
+                    ++cursor_x;
                 }
             }
         }

@@ -16,6 +16,7 @@ typedef struct Keyboard_State {
     b8 shift_down;
     b8 caps_lock_down;
     b8 right_alt_down;
+    b8 in_escaped_mode;
 } Keyboard_State;
 
 static Event_Buffer event_buffer;
@@ -65,8 +66,8 @@ void keyboard_interrupt_handler(void) {
     const b8 down = (scan_code & 0x80) == 0;
     const u8 normalized_scan_code = scan_code & 0x7f;
 
-    if(normalized_scan_code > 0 && normalized_scan_code < ARRAY_COUNT(active_scan_code_table->per_scan_code)) {
-        const OS_Input_Key_Code key_code = read_key_code(active_scan_code_table->per_scan_code[normalized_scan_code]);
+    if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
+        const OS_Input_Key_Code key_code = read_key_code(active_scan_code_table->ordinary[normalized_scan_code]);
         const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, ascii_from_keycode[key_code], down, keyboard_state.shift_down || keyboard_state.caps_lock_down, keyboard_state.right_alt_down };
         push_event(make_keyboard_event(keyboard_event));
 
@@ -82,11 +83,9 @@ void keyboard_interrupt_handler(void) {
                 }
                 break;
 
-            /* @Incomplete: Right alt key is not currently parsed
             case OS_INPUT_KEY_Right_Alt:
-                keyboard_state.altgr_down = down;
+                keyboard_state.right_alt_down = down;
                 break;
-            */
 
             default:
                 break;

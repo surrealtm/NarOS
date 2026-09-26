@@ -3,7 +3,7 @@
 #include "input.h"
 #include "base.h"
 
-#define SUPPORTED_SCAN_CODE_COUNT 0x47
+#define SUPPORTED_SCAN_CODE_COUNT 0x54
 #define NON_PRINTABLE_CHARACTER 0
 
 /**
@@ -17,13 +17,14 @@ typedef struct Scan_Code_Mapping {
 } Scan_Code_Mapping;
 
 typedef struct Scan_Code_Table {
-    Scan_Code_Mapping per_scan_code[SUPPORTED_SCAN_CODE_COUNT];
+    Scan_Code_Mapping ordinary[SUPPORTED_SCAN_CODE_COUNT];
+    Scan_Code_Mapping escaped[SUPPORTED_SCAN_CODE_COUNT];
 } Scan_Code_Table;
 
 // @Incomplete: Missing a german table, and an API to toggle the keyboard layout
 
 static const Scan_Code_Table scan_code_table_en = {
-    .per_scan_code = {
+    .ordinary = {
         [0x00] = { .normal = OS_INPUT_KEY_Unknown,       .shift = OS_INPUT_KEY_Unknown,           .alt = OS_INPUT_KEY_Unknown },
         [0x01] = { .normal = OS_INPUT_KEY_Escape,        .shift = OS_INPUT_KEY_Escape,            .alt = OS_INPUT_KEY_Escape },
         [0x02] = { .normal = OS_INPUT_KEY_1,             .shift = OS_INPUT_KEY_Exclamation_Mark,  .alt = OS_INPUT_KEY_1 },
@@ -96,6 +97,16 @@ static const Scan_Code_Table scan_code_table_en = {
         [0x45] = { .normal = OS_INPUT_KEY_Num_Lock,      .shift = OS_INPUT_KEY_Num_Lock,          .alt = OS_INPUT_KEY_Num_Lock },
         [0x46] = { .normal = OS_INPUT_KEY_Scroll_Lock,   .shift = OS_INPUT_KEY_Scroll_Lock,       .alt = OS_INPUT_KEY_Scroll_Lock },
     },
+
+    .escaped = {
+        [0x1d] = { .normal = OS_INPUT_KEY_Right_Control, .shift = OS_INPUT_KEY_Right_Control, .alt = OS_INPUT_KEY_Right_Control },
+        [0x38] = { .normal = OS_INPUT_KEY_Right_Alt,     .shift = OS_INPUT_KEY_Right_Alt,     .alt = OS_INPUT_KEY_Right_Alt },
+        [0x48] = { .normal = OS_INPUT_KEY_Arrow_Up,      .shift = OS_INPUT_KEY_Arrow_Up,      .alt = OS_INPUT_KEY_Arrow_Up },
+        [0x4b] = { .normal = OS_INPUT_KEY_Arrow_Left,    .shift = OS_INPUT_KEY_Arrow_Left,    .alt = OS_INPUT_KEY_Arrow_Left },
+        [0x4d] = { .normal = OS_INPUT_KEY_Arrow_Right,   .shift = OS_INPUT_KEY_Arrow_Right,   .alt = OS_INPUT_KEY_Arrow_Right },
+        [0x50] = { .normal = OS_INPUT_KEY_Arrow_Down,    .shift = OS_INPUT_KEY_Arrow_Down,    .alt = OS_INPUT_KEY_Arrow_Down },
+        [0x53] = { .normal = OS_INPUT_KEY_Delete,        .shift = OS_INPUT_KEY_Delete,        .alt = OS_INPUT_KEY_Delete },
+    },
 };
 
 // Implemented according to: https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
@@ -106,14 +117,21 @@ static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Escape] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Enter] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Backspace] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Delete] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Tab] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Left_Control] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Right_Control] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Left_Shift] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Right_Shift] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Left_Alt] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Right_Alt] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Caps_Lock] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Num_Lock] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_Scroll_Lock] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Arrow_Up] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Arrow_Right] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Arrow_Down] = NON_PRINTABLE_CHARACTER,
+    [OS_INPUT_KEY_Arrow_Left] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_F1] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_F2] = NON_PRINTABLE_CHARACTER,
     [OS_INPUT_KEY_F3] = NON_PRINTABLE_CHARACTER,
