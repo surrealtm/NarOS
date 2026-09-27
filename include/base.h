@@ -9,6 +9,9 @@
 #define false 0
 #define null 0
 
+#define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
+#define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
+
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;

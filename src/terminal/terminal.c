@@ -144,6 +144,8 @@ void blit_to_screen(const Terminal *terminal) {
     blit_input_string_to_screen(text_input_prefix, &input_cursor_x, &input_cursor_y);
     blit_input_string_to_screen(terminal->text_input.buffer, &input_cursor_x, &input_cursor_y);
 
+    // @Cleanup: Rename the backlog "cursor" to write_position, same with the input_cursor_ variable here!
+
     // Draw the cursor
     {
         const u32 cursor_x = (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKLOG_WIDTH;
