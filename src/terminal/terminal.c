@@ -111,42 +111,46 @@ void print_unsigned_integer(Terminal *terminal, u64 integer, const OS_Display_Co
 }
 
 static
-u32 blit_input_string_to_screen(const char *input_string, u32 cursor_offset) {
+void blit_input_string_to_screen(const char *input_string, u32 *cursor_x, u32 *cursor_y) {
     const OS_Display_Color color = OS_DISPLAY_Bright_White;
     while(*input_string) {
-        os_display_set_character(cursor_offset % BACKLOG_WIDTH, BACKLOG_HEIGHT - (cursor_offset / BACKLOG_WIDTH + 1), *input_string, color);
+        os_display_set_character(*cursor_x, *cursor_y, *input_string, color);
+        ++(*cursor_x);
+        if(*cursor_x == BACKLOG_WIDTH) {
+            *cursor_x = 0;
+            ++(*cursor_y);
+        }
         ++input_string;
-        ++cursor_offset;
     }
-    return cursor_offset;
 }
 
 static
 void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
-    // @Incomplete: This is wrong for multiple lines! The second line is rendered above the first line!
-    const char *text_input_prefix = ">> ";
-    const u32 prefix_length     = blit_input_string_to_screen(text_input_prefix, 0);
-    const u32 input_line_length = blit_input_string_to_screen(terminal->text_input.buffer, prefix_length);
-    const u32 input_line_count  = input_line_length / BACKLOG_WIDTH + 1;
+    const char *text_input_prefix  = ">> ";
+    const u32 overflowing_input_lines = (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.count) / BACKLOG_WIDTH;
 
+    // Draw the backlog
+    for(u32 y = overflowing_input_lines; y < BACKLOG_HEIGHT; ++y) {
+        for(u32 x = 0; x < BACKLOG_WIDTH; ++x) {
+            const Cell cell = query_cell(terminal, x, y);
+            os_display_set_character(x, y - overflowing_input_lines, cell.character, cell.color);
+        }
+    }
+
+    // Draw the input line
+    u32 input_cursor_x = terminal->backlog_cursor_x, input_cursor_y = terminal->backlog_cursor_y - overflowing_input_lines;
+    blit_input_string_to_screen(text_input_prefix, &input_cursor_x, &input_cursor_y);
+    blit_input_string_to_screen(terminal->text_input.buffer, &input_cursor_x, &input_cursor_y);
+
+    // Draw the cursor
     {
-        const u32 input_cursor_x = (prefix_length + terminal->text_input.cursor) % BACKLOG_WIDTH;
-        const u32 input_cursor_y = BACKLOG_HEIGHT - input_line_count;
         if(terminal->text_input.cursor == terminal->text_input.count) {
             // The VGA display protocol needs a valid character at this position for it to render the cursor...
             os_display_set_character(input_cursor_x, input_cursor_y, ' ', OS_DISPLAY_White);
         }
         os_display_set_cursor_position(input_cursor_x, input_cursor_y);
-    }
-
-    // @Speed: We could just memcpy this into the video memory...
-    for(u32 y = input_line_count; y < BACKLOG_HEIGHT - input_line_count; ++y) {
-        for(u32 x = 0; x < BACKLOG_WIDTH; ++x) {
-            const Cell cell = query_cell(terminal, x, y);
-            os_display_set_character(x, y, cell.character, cell.color);
-        }
     }
 }
 
