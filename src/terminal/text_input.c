@@ -30,7 +30,7 @@ u32 find_control_point_to_the_right(const Text_Input *text_input) {
     while(idx + 1 < text_input->count && !is_empty_character(text_input->buffer[idx])) ++idx;
 
     // Skip all trailing empty characters until the start of the next word
-    while(idx + 1 < text_input->count && is_empty_character(text_input->buffer[idx])) ++idx;
+    while(idx < text_input->count && is_empty_character(text_input->buffer[idx + 1])) ++idx;
 
     return idx;
 }
@@ -87,7 +87,7 @@ Text_Input_Signal text_input_update(Text_Input *text_input) {
 
             case OS_INPUT_KEY_Delete: {
                 const u32 first_idx = text_input->cursor;
-                const u32 last_idx = control ? find_control_point_to_the_right(text_input) : first_idx;
+                const u32 last_idx = control ? min(find_control_point_to_the_right(text_input), text_input->count - 1) : first_idx;
                 erase_text(text_input, first_idx, last_idx);
             } break;
 

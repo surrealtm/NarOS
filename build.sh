@@ -103,7 +103,7 @@ object_file_path() {
 # ----------------------------------------------------------------------------------------------------------------
 # Build the Kernel
 # ----------------------------------------------------------------------------------------------------------------
-KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
+KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -T linker.ld -e kernel_main"
 KERNEL_ASSEMBLER_OPTIONS="-f elf"
 KERNEL_COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR} -I${SOURCE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
