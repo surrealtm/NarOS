@@ -125,22 +125,24 @@ static
 void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
+    // @Incomplete: This is wrong for multiple lines! The second line is rendered above the first line!
     const char *text_input_prefix = ">> ";
-    u32 input_string_offset = 0;
-    input_string_offset = blit_input_string_to_screen(text_input_prefix, 0);
-    input_string_offset = blit_input_string_to_screen(terminal->text_input.buffer, input_string_offset);
-
-    const u32 text_input_line_count = input_string_offset / BACKLOG_WIDTH + 1;
+    const u32 prefix_length     = blit_input_string_to_screen(text_input_prefix, 0);
+    const u32 input_line_length = blit_input_string_to_screen(terminal->text_input.buffer, prefix_length);
+    const u32 input_line_count  = input_line_length / BACKLOG_WIDTH + 1;
 
     {
-        const u32 input_cursor_x = input_string_offset % BACKLOG_WIDTH;
-        const u32 input_cursor_y = BACKLOG_HEIGHT - text_input_line_count;
-        os_display_set_character(input_cursor_x, input_cursor_y, ' ', OS_DISPLAY_White);
+        const u32 input_cursor_x = (prefix_length + terminal->text_input.cursor) % BACKLOG_WIDTH;
+        const u32 input_cursor_y = BACKLOG_HEIGHT - input_line_count;
+        if(terminal->text_input.cursor == terminal->text_input.count) {
+            // The VGA display protocol needs a valid character at this position for it to render the cursor...
+            os_display_set_character(input_cursor_x, input_cursor_y, ' ', OS_DISPLAY_White);
+        }
         os_display_set_cursor_position(input_cursor_x, input_cursor_y);
     }
 
     // @Speed: We could just memcpy this into the video memory...
-    for(u32 y = text_input_line_count; y < BACKLOG_HEIGHT - text_input_line_count; ++y) {
+    for(u32 y = input_line_count; y < BACKLOG_HEIGHT - input_line_count; ++y) {
         for(u32 x = 0; x < BACKLOG_WIDTH; ++x) {
             const Cell cell = query_cell(terminal, x, y);
             os_display_set_character(x, y, cell.character, cell.color);

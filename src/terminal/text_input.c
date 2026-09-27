@@ -14,11 +14,37 @@ void write_character(Text_Input *text_input, char character) {
 }
 
 static
+void move_cursor_to_the_left(Text_Input *text_input) {
+    if(text_input->cursor == 0) {
+        return;
+    }
+    --text_input->cursor;
+}
+
+static
+void move_cursor_to_the_right(Text_Input *text_input) {
+    if(text_input->cursor == text_input->count) {
+        return;
+    }
+    ++text_input->cursor;
+}
+
+static
+void remove_character_to_the_right(Text_Input *text_input) {
+    if(text_input->cursor == text_input->count) {
+        return;
+    }
+    move_memory(&text_input->buffer[text_input->cursor], &text_input->buffer[text_input->cursor + 1], text_input->count - text_input->cursor);
+    text_input->buffer[text_input->count - 1] = 0;
+    --text_input->count;
+}
+
+static
 void remove_character_to_the_left(Text_Input *text_input) {
     if(text_input->cursor == 0) {
         return;
     }
-    move_memory(&text_input->buffer[text_input->cursor], &text_input->buffer[text_input->cursor + 1], text_input->count - text_input->cursor);
+    move_memory(&text_input->buffer[text_input->cursor - 1], &text_input->buffer[text_input->cursor], text_input->count - text_input->cursor + 1);
     text_input->buffer[text_input->count - 1] = 0;
     --text_input->cursor;
     --text_input->count;
@@ -48,6 +74,18 @@ Text_Input_Signal text_input_update(Text_Input *text_input) {
 
             case OS_INPUT_KEY_Backspace:
                 remove_character_to_the_left(text_input);
+                break;
+
+            case OS_INPUT_KEY_Delete:
+                remove_character_to_the_right(text_input);
+                break;
+
+            case OS_INPUT_KEY_Arrow_Left:
+                move_cursor_to_the_left(text_input);
+                break;
+
+            case OS_INPUT_KEY_Arrow_Right:
+                move_cursor_to_the_right(text_input);
                 break;
 
             default:
