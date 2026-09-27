@@ -13,8 +13,11 @@ typedef struct Event_Buffer {
 } Event_Buffer;
 
 typedef struct Keyboard_State {
-    b8 shift_down;
-    b8 caps_lock_down;
+    b8 left_control_down;
+    b8 right_control_down;
+    b8 left_shift_down;
+    b8 right_shift_down;
+    b8 caps_lock_active;
     b8 right_alt_down;
     b8 in_escaped_mode;
 } Keyboard_State;
@@ -53,7 +56,7 @@ static
 OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
     if(keyboard_state.right_alt_down) {
         return mapping.alt;
-    } else if(keyboard_state.shift_down || keyboard_state.caps_lock_down) {
+    } else if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) {
         return mapping.shift;
     } else {
         return mapping.normal;
@@ -70,6 +73,15 @@ char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_d
 }
 
 static
+OS_Input_Keyboard_Modifiers get_keyboard_modifiers(void) {
+    OS_Input_Keyboard_Modifiers mods = 0x0;
+    if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Shift;
+    if(keyboard_state.left_control_down || keyboard_state.right_control_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Control;
+    if(keyboard_state.right_alt_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt;
+    return mods;
+}
+
+static
 void keyboard_interrupt_handler(void) {
     const u8 scan_code = port_read_u8(0x60);
     const b8 down = (scan_code & 0x80) == 0;
@@ -78,22 +90,28 @@ void keyboard_interrupt_handler(void) {
     if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
         const Scan_Code_Mapping *active_table = (keyboard_state.in_escaped_mode) ? active_scan_code_table->escaped : active_scan_code_table->ordinary;
         const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
-        const b8 shift_down = keyboard_state.shift_down || keyboard_state.caps_lock_down;
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, read_ascii_from_key_code(key_code, shift_down), down, shift_down, keyboard_state.right_alt_down };
+        const OS_Input_Keyboard_Modifiers mods = get_keyboard_modifiers();
+        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, mods, read_ascii_from_key_code(key_code, !!(mods & OS_INPUT_KEYBOARD_MODIFIERS_Shift)), down };
         push_event(make_keyboard_event(keyboard_event));
 
         switch(key_code) {
-            case OS_INPUT_KEY_Left_Shift:
-            case OS_INPUT_KEY_Right_Shift:
-                keyboard_state.shift_down = down;
+            case OS_INPUT_KEY_Left_Control:
+                keyboard_state.left_control_down = down;
                 break;
-
+            case OS_INPUT_KEY_Right_Control:
+                keyboard_state.right_control_down = down;
+                break;
+            case OS_INPUT_KEY_Left_Shift:
+                keyboard_state.left_shift_down = down;
+                break;
+            case OS_INPUT_KEY_Right_Shift:
+                keyboard_state.right_shift_down = down;
+                break;
             case OS_INPUT_KEY_Caps_Lock:
                 if(down) {
-                    keyboard_state.caps_lock_down = !keyboard_state.caps_lock_down;
+                    keyboard_state.caps_lock_active = !keyboard_state.caps_lock_active;
                 }
                 break;
-
             case OS_INPUT_KEY_Right_Alt:
                 keyboard_state.right_alt_down = down;
                 break;
