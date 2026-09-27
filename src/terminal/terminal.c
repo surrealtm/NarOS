@@ -146,11 +146,13 @@ void blit_to_screen(const Terminal *terminal) {
 
     // Draw the cursor
     {
+        const u32 cursor_x = (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKLOG_WIDTH;
+        const u32 cursor_y = terminal->backlog_cursor_y - overflowing_input_lines + (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.cursor) / BACKLOG_WIDTH;
         if(terminal->text_input.cursor == terminal->text_input.count) {
             // The VGA display protocol needs a valid character at this position for it to render the cursor...
-            os_display_set_character(input_cursor_x, input_cursor_y, ' ', OS_DISPLAY_White);
+            os_display_set_character(cursor_x, cursor_y, ' ', OS_DISPLAY_White);
         }
-        os_display_set_cursor_position(input_cursor_x, input_cursor_y);
+        os_display_set_cursor_position(cursor_x, cursor_y);
     }
 }
 
