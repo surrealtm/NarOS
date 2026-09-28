@@ -18,7 +18,11 @@ typedef struct Terminal {
     u32 backbuffer_write_x;
     u32 backbuffer_write_y;
     Text_Input text_input;
+
+    OS_Display_Color configured_foreground, configured_background;
 } Terminal;
+
+static Terminal terminal = { 0 };
 
 static
 Cell query_cell(const Terminal *terminal, u32 x, u32 y) {
@@ -56,7 +60,7 @@ void advance_cursor_horizontally(Terminal *terminal) {
 }
 
 static
-void print_character(Terminal *terminal, const char character, const OS_Display_Color foreground, const OS_Display_Color background) {
+void write_character(Terminal *terminal, const char character, const OS_Display_Color foreground, const OS_Display_Color background) {
     if(character == '\r') {
         terminal->backbuffer_write_x = 0;
     } else if(character == '\n') {
@@ -66,14 +70,6 @@ void print_character(Terminal *terminal, const char character, const OS_Display_
         const u32 idx = (terminal->backbuffer_write_y * BACKBUFFER_WIDTH) + terminal->backbuffer_write_x;
         terminal->backbuffer[idx] = (Cell) { character, foreground, background };
         advance_cursor_horizontally(terminal);
-    }
-}
-
-static
-void print_string(Terminal *terminal, const char *text, const OS_Display_Color foreground, const OS_Display_Color background) {
-    while(*text) {
-        print_character(terminal, *text, foreground, background);
-        ++text;
     }
 }
 
@@ -105,7 +101,7 @@ void print_unsigned_integer(Terminal *terminal, u64 integer, const OS_Display_Co
     while(index >= 0) {
         u64 power = radix_power(index);
         u64 digit = integer / power;
-        print_character(terminal, digit + '0', foreground, background);
+        write_character(terminal, digit + '0', foreground, background);
         integer -= digit * power;
         --index;
     }
@@ -165,18 +161,32 @@ void wait_for_input(void) {
     }
 }
 
-void terminal_enter(void) {
-    Terminal terminal = { 0 };
-    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
+static
+void print_welcome_message(void) {
+    os_display_clear(' ', OS_DISPLAY_White);
+    terminal_set_color(OS_DISPLAY_Cyan, OS_DISPLAY_Black);
+    terminal_print_string("Welcome to ");
+    terminal_set_color(OS_DISPLAY_Light_Cyan, OS_DISPLAY_Black);
+    terminal_print_string("NarOS\n");
+    terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
+    terminal_print_string("This is the terminal interface.\n");
+    terminal_print_string("Type ");
+    terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
+    terminal_print_string(":quit");
+    terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
+    terminal_print_string(" to shut down the kernel.\n");
+}
 
+void terminal_enter(void) {
     (void) print_unsigned_integer;
 
-    os_display_clear(' ', OS_DISPLAY_White);
-    print_string(&terminal, "Hello World\nThis is the second line!", OS_DISPLAY_White, OS_DISPLAY_Black);
-    print_string(&terminal, " This is the continuation of the second line!\n", OS_DISPLAY_White, OS_DISPLAY_Black);
-    print_string(&terminal, "And this is a really important message!\n", OS_DISPLAY_Red, OS_DISPLAY_Black);
+    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
+    terminal.configured_foreground = OS_DISPLAY_White;
+    terminal.configured_background = OS_DISPLAY_Black;
 
-    while(true) {
+    print_welcome_message();
+
+    while(!os_ctrl_exit_requested()) {
         blit_to_screen(&terminal);
         const Text_Input_Signal text_input_signal = text_input_update(&terminal.text_input);
         switch(text_input_signal) {
@@ -184,11 +194,26 @@ void terminal_enter(void) {
                 wait_for_input();
                 break;
             case TEXT_INPUT_SIGNAL_Entered:
-                print_string(&terminal, "> ", OS_DISPLAY_White, OS_DISPLAY_Black);
-                print_string(&terminal, terminal.text_input.buffer, OS_DISPLAY_White, OS_DISPLAY_Black);
-                print_string(&terminal, "\n", OS_DISPLAY_White, OS_DISPLAY_Black);
+                terminal_print_string("> ");
+                terminal_print_string(terminal.text_input.buffer);
+                terminal_print_string("\n");
+                if(compare_strings(terminal.text_input.buffer, ":quit") == 0) {
+                    os_ctrl_exit();
+                }
                 text_input_clear(&terminal.text_input);
                 break;
         }
+    }
+}
+
+void terminal_set_color(OS_Display_Color foreground, OS_Display_Color background) {
+    terminal.configured_foreground = foreground;
+    terminal.configured_background = background;
+}
+
+void terminal_print_string(const char *string) {
+    while(*string) {
+        write_character(&terminal, *string, terminal.configured_foreground, terminal.configured_background);
+        ++string;
     }
 }

@@ -26,6 +26,15 @@ s32 compare_memory(const void *lhs, const void *rhs, const u32 size_in_bytes) {
     return 0;
 }
 
+s32 compare_strings(const char *lhs, const char *rhs) {
+    u32 i;
+    for(i = 0; lhs[i] != 0 && rhs[i] != 0; ++i) {
+        const u8 diff = ((u8 *) lhs)[i] - ((u8 *) rhs)[i];
+        if(diff != 0) return diff;
+    }
+    return lhs[i] - rhs[i];
+}
+
 s32 string_length(const char *string) {
     s32 count;
     for(count = 0; string[count]; ++count) {}

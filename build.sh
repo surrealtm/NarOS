@@ -123,6 +123,7 @@ KERNEL_C_SOURCE_FILES=(
     "input/input.c"
     "interrupt/interrupt.c"
     "math/math.c"
+    "output/output.c"
     "port/port.c"
     "terminal/terminal.c"
     "terminal/text_input.c"
