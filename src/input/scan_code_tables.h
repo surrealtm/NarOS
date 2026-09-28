@@ -5,6 +5,10 @@
 
 #define SUPPORTED_SCAN_CODE_COUNT 0x57
 #define NON_PRINTABLE_CHARACTER 0
+#define UMLAUT_A 0xc4
+#define UMLAUT_O 0xd6
+#define UMLAUT_U 0xdc
+#define SHARP_S  0xdf
 
 /**
  * Maps a scan code (identified by the index in the mapping table) to the key code associated with it.
@@ -195,7 +199,7 @@ static const Scan_Code_Table scan_code_table_de = {
     },
 };
 
-static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
+static const u32 utf32_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Unknown] = NON_PRINTABLE_CHARACTER,
 
     /* Non Printable Characters */
@@ -265,10 +269,10 @@ static const u8 ascii_from_keycode[OS_INPUT_KEY_COUNT] = {
     [OS_INPUT_KEY_Question_Mark] = '?',
 
     /* German Keys */
-    [OS_INPUT_KEY_Sharp_S]  = 'S',
-    [OS_INPUT_KEY_Umlaut_A] = 'A',
-    [OS_INPUT_KEY_Umlaut_O] = 'O',
-    [OS_INPUT_KEY_Umlaut_U] = 'U',
+    [OS_INPUT_KEY_Sharp_S]  = SHARP_S,
+    [OS_INPUT_KEY_Umlaut_A] = UMLAUT_A,
+    [OS_INPUT_KEY_Umlaut_O] = UMLAUT_O,
+    [OS_INPUT_KEY_Umlaut_U] = UMLAUT_U,
 
     /* Latin Characters */
     [OS_INPUT_KEY_0] = '0',

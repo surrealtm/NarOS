@@ -129,12 +129,18 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_COUNT,
 } OS_Input_Key_Code;
 
+typedef enum OS_Input_Keyboard_Modifiers {
+    OS_INPUT_KEYBOARD_MODIFIERS_None      = 0x0,
+    OS_INPUT_KEYBOARD_MODIFIERS_Shift     = 0x1,
+    OS_INPUT_KEYBOARD_MODIFIERS_Control   = 0x2,
+    OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt = 0x4,
+} OS_Input_Keyboard_Modifiers;
+
 typedef struct OS_Input_Keyboard_Event {
     OS_Input_Key_Code key_code;
-    u8 ascii;
+    OS_Input_Keyboard_Modifiers modifiers;
+    u32 utf32;
     b8 down;
-    b8 shift_down;
-    b8 right_alt_down;
 } OS_Input_Keyboard_Event;
 
 typedef struct OS_Input_Event {

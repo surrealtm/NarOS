@@ -103,7 +103,7 @@ object_file_path() {
 # ----------------------------------------------------------------------------------------------------------------
 # Build the Kernel
 # ----------------------------------------------------------------------------------------------------------------
-KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -Ttext 0x1000 -e kernel_main"
+KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -T linker.ld -e kernel_main"
 KERNEL_ASSEMBLER_OPTIONS="-f elf"
 KERNEL_COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR} -I${SOURCE_DIR}"
 if [[ ${DEBUG_QEMU} == true ]]; then
@@ -123,7 +123,10 @@ KERNEL_C_SOURCE_FILES=(
     "input/input.c"
     "interrupt/interrupt.c"
     "math/math.c"
+    "output/output.c"
     "port/port.c"
+    "terminal/terminal.c"
+    "terminal/text_input.c"
 )
 
 KERNEL_ASM_SOURCE_FILES=(
@@ -192,7 +195,7 @@ if [[ ${DEBUG_QEMU} == true ]]; then
         -ex "set confirm off" \
         -ex "file ${BUILD_DIR}kernel.elf" \
         -ex "target remote localhost:1234" &
-    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} -S -s
+    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} -S -s -d int,cpu_reset -no-reboot
 elif [[ ${RUN_QEMU} == true ]]; then
     echo " + Launching QEMU run..."
     qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME}

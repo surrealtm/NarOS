@@ -9,6 +9,9 @@
 #define false 0
 #define null 0
 
+#define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
+#define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
+
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;
@@ -38,5 +41,7 @@ STATIC_ASSERT(sizeof(f32) == 4);
 STATIC_ASSERT(sizeof(b8)  == 1);
 
 void set_memory(void *dst, u8 value, u32 size_in_bytes);
+void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
+s32 compare_strings(const char *lhs, const char *rhs);
 s32 string_length(const char *string);

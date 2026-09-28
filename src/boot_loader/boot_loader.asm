@@ -170,7 +170,7 @@ DATA_SEGMENT equ gdt_data - gdt_start
 ; ----------------------------------------------------------------------------------------------------------------
 ; Data Declarations
 ; ----------------------------------------------------------------------------------------------------------------
-KERNEL_OFFSET equ 0x1000
+KERNEL_OFFSET equ 0x8000 ; The linker script declares the start of the .text section at this offset
 INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
