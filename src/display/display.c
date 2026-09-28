@@ -26,14 +26,14 @@ void os_display_clear(const char character, const OS_Display_Color color) {
     }
 }
 
-void os_display_set_character(const s32 x, const s32 y, const char character, const OS_Display_Color color) {
+void os_display_set_character(const s32 x, const s32 y, const char character, const OS_Display_Color foreground, const OS_Display_Color background) {
     if(x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
         return;
     }
 
     const u32 idx = (y * DISPLAY_WIDTH + x) * 2;
     video_memory[idx + 0] = character;
-    video_memory[idx + 1] = color;
+    video_memory[idx + 1] = (background << 4) | foreground;
 }
 
 void os_display_set_cursor_position(const s32 x, const s32 y) {
