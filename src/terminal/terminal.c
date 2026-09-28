@@ -4,8 +4,8 @@
 #include "display.h"
 #include "terminal/text_input.h"
 
-#define BACKLOG_WIDTH 80
-#define BACKLOG_HEIGHT 25
+#define BACKBUFFER_WIDTH  80
+#define BACKBUFFER_HEIGHT 25
 
 typedef struct Cell {
     char character;
@@ -13,32 +13,32 @@ typedef struct Cell {
 } Cell;
 
 typedef struct Terminal {
-    Cell backlog[BACKLOG_WIDTH * BACKLOG_HEIGHT];
-    u32 backlog_cursor_x;
-    u32 backlog_cursor_y;
+    Cell backbuffer[BACKBUFFER_WIDTH * BACKBUFFER_HEIGHT];
+    u32 backbuffer_write_x;
+    u32 backbuffer_write_y;
     Text_Input text_input;
 } Terminal;
 
 static
 Cell query_cell(const Terminal *terminal, u32 x, u32 y) {
-    const u32 idx = (y * BACKLOG_WIDTH) + x;
-    return terminal->backlog[idx];
+    const u32 idx = (y * BACKBUFFER_WIDTH) + x;
+    return terminal->backbuffer[idx];
 }
 
 static
 void scroll_one_line(Terminal *terminal) {
     const u32 start_of_first_line  = 0;
-    const u32 start_of_second_line = BACKLOG_WIDTH;
-    const u32 start_of_last_line   = BACKLOG_WIDTH * (BACKLOG_HEIGHT - 1);
-    const u32 one_plus_end_of_last_line = BACKLOG_HEIGHT * BACKLOG_WIDTH;
-    move_memory(&terminal->backlog[start_of_first_line], &terminal->backlog[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
-    set_memory(&terminal->backlog[start_of_last_line], 0, (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
+    const u32 start_of_second_line = BACKBUFFER_WIDTH;
+    const u32 start_of_last_line   = BACKBUFFER_WIDTH * (BACKBUFFER_HEIGHT - 1);
+    const u32 one_plus_end_of_last_line = BACKBUFFER_HEIGHT * BACKBUFFER_WIDTH;
+    move_memory(&terminal->backbuffer[start_of_first_line], &terminal->backbuffer[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
+    set_memory(&terminal->backbuffer[start_of_last_line], 0, (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
 }
 
 static
 void advance_cursor_vertically(Terminal *terminal) {
-    if(terminal->backlog_cursor_y < BACKLOG_HEIGHT - 1) {
-        ++terminal->backlog_cursor_y;
+    if(terminal->backbuffer_write_y < BACKBUFFER_HEIGHT - 1) {
+        ++terminal->backbuffer_write_y;
     } else {
         scroll_one_line(terminal);
     }
@@ -46,24 +46,24 @@ void advance_cursor_vertically(Terminal *terminal) {
 
 static
 void advance_cursor_horizontally(Terminal *terminal) {
-    if(terminal->backlog_cursor_x < BACKLOG_WIDTH - 1) {
-        ++terminal->backlog_cursor_x;
+    if(terminal->backbuffer_write_x < BACKBUFFER_WIDTH - 1) {
+        ++terminal->backbuffer_write_x;
     } else {
         advance_cursor_vertically(terminal);
-        terminal->backlog_cursor_x = 0;
+        terminal->backbuffer_write_x = 0;
     }
 }
 
 static
 void print_character(Terminal *terminal, const char character, const OS_Display_Color color) {
     if(character == '\r') {
-        terminal->backlog_cursor_x = 0;
+        terminal->backbuffer_write_x = 0;
     } else if(character == '\n') {
         advance_cursor_vertically(terminal);
-        terminal->backlog_cursor_x = 0;
+        terminal->backbuffer_write_x = 0;
     } else {
-        const u32 idx = (terminal->backlog_cursor_y * BACKLOG_WIDTH) + terminal->backlog_cursor_x;
-        terminal->backlog[idx] = (Cell) { character, color };
+        const u32 idx = (terminal->backbuffer_write_y * BACKBUFFER_WIDTH) + terminal->backbuffer_write_x;
+        terminal->backbuffer[idx] = (Cell) { character, color };
         advance_cursor_horizontally(terminal);
     }
 }
@@ -116,7 +116,7 @@ void blit_input_string_to_screen(const char *input_string, u32 *cursor_x, u32 *c
     while(*input_string) {
         os_display_set_character(*cursor_x, *cursor_y, *input_string, color);
         ++(*cursor_x);
-        if(*cursor_x == BACKLOG_WIDTH) {
+        if(*cursor_x == BACKBUFFER_WIDTH) {
             *cursor_x = 0;
             ++(*cursor_y);
         }
@@ -129,27 +129,25 @@ void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
     const char *text_input_prefix  = ">> ";
-    const u32 overflowing_input_lines = (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.count) / BACKLOG_WIDTH;
+    const u32 overflowing_input_lines = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.count) / BACKBUFFER_WIDTH;
 
-    // Draw the backlog
-    for(u32 y = overflowing_input_lines; y < BACKLOG_HEIGHT; ++y) {
-        for(u32 x = 0; x < BACKLOG_WIDTH; ++x) {
+    // Draw the backbuffer
+    for(u32 y = overflowing_input_lines; y < BACKBUFFER_HEIGHT; ++y) {
+        for(u32 x = 0; x < BACKBUFFER_WIDTH; ++x) {
             const Cell cell = query_cell(terminal, x, y);
             os_display_set_character(x, y - overflowing_input_lines, cell.character, cell.color);
         }
     }
 
     // Draw the input line
-    u32 input_cursor_x = terminal->backlog_cursor_x, input_cursor_y = terminal->backlog_cursor_y - overflowing_input_lines;
-    blit_input_string_to_screen(text_input_prefix, &input_cursor_x, &input_cursor_y);
-    blit_input_string_to_screen(terminal->text_input.buffer, &input_cursor_x, &input_cursor_y);
-
-    // @Cleanup: Rename the backlog "cursor" to write_position, same with the input_cursor_ variable here!
+    u32 input_write_x = terminal->backbuffer_write_x, input_write_y = terminal->backbuffer_write_y - overflowing_input_lines;
+    blit_input_string_to_screen(text_input_prefix, &input_write_x, &input_write_y);
+    blit_input_string_to_screen(terminal->text_input.buffer, &input_write_x, &input_write_y);
 
     // Draw the cursor
     {
-        const u32 cursor_x = (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKLOG_WIDTH;
-        const u32 cursor_y = terminal->backlog_cursor_y - overflowing_input_lines + (terminal->backlog_cursor_x + string_length(text_input_prefix) + terminal->text_input.cursor) / BACKLOG_WIDTH;
+        const u32 cursor_x = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKBUFFER_WIDTH;
+        const u32 cursor_y = terminal->backbuffer_write_y - overflowing_input_lines + (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) / BACKBUFFER_WIDTH;
         if(terminal->text_input.cursor == terminal->text_input.count) {
             // The VGA display protocol needs a valid character at this position for it to render the cursor...
             os_display_set_character(cursor_x, cursor_y, ' ', OS_DISPLAY_White);
@@ -167,7 +165,7 @@ void wait_for_input(void) {
 
 void terminal_enter(void) {
     Terminal terminal = { 0 };
-    terminal.backlog_cursor_y = BACKLOG_HEIGHT - 1;
+    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
 
     (void) print_unsigned_integer;
 
