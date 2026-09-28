@@ -139,7 +139,7 @@ typedef enum OS_Input_Keyboard_Modifiers {
 typedef struct OS_Input_Keyboard_Event {
     OS_Input_Key_Code key_code;
     OS_Input_Keyboard_Modifiers modifiers;
-    u8 ascii;
+    u32 utf32;
     b8 down;
 } OS_Input_Keyboard_Event;
 

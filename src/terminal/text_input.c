@@ -104,8 +104,10 @@ Text_Input_Signal text_input_update(Text_Input *text_input) {
             } break;
 
             default:
-                if(event.data.keyboard.ascii != 0) {
-                    insert_text(text_input, (const char *) &event.data.keyboard.ascii, 1);
+                if(event.data.keyboard.key_code == OS_INPUT_KEY_C && event.data.keyboard.modifiers & OS_INPUT_KEYBOARD_MODIFIERS_Control) {
+                    text_input_clear(text_input);
+                } else if(event.data.keyboard.utf32 >= 0x20 && event.data.keyboard.utf32 < 0xff) {
+                    insert_text(text_input, (const char *) &event.data.keyboard.utf32, 1);
                 }
         }
     }

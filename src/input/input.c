@@ -65,11 +65,17 @@ OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
 
 static
 char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_down) {
-    const char ascii = ascii_from_keycode[key_code];
-    if(!shift_down && ascii >= 'A' && ascii <= 'Z') {
-        return ascii - 'A' + 'a';
+    const u32 utf32 = utf32_from_keycode[key_code];
+    if(shift_down) {
+        return utf32;
     }
-    return ascii;
+    if(utf32 >= 'A' && utf32 <= 'Z') {
+        return utf32 - 'A' + 'a';
+    }
+    if(utf32 == UMLAUT_A || utf32 == UMLAUT_O || utf32 == UMLAUT_U) {
+        return utf32 + 0x20;
+    }
+    return utf32;
 }
 
 static
