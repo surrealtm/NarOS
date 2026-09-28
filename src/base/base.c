@@ -1,7 +1,7 @@
 #include "base.h"
 
 void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
-    for(u64 i = 0; i < size_in_bytes; ++i) {
+    for(u64 i = 0; i < (u64) size_in_bytes; ++i) {
         ((u8 *) dst)[i] = value;
     }
 }
@@ -34,4 +34,8 @@ s32 string_length(const char *string) {
 
 void memset(void *dst, const u8 value, const u32 size_in_bytes) {
     set_memory(dst, value, size_in_bytes);
+}
+
+void memcpy(void *dst, const void *src, const u32 size_in_bytes) {
+    move_memory(dst, src, size_in_bytes);
 }

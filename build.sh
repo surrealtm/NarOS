@@ -194,7 +194,7 @@ if [[ ${DEBUG_QEMU} == true ]]; then
         -ex "set confirm off" \
         -ex "file ${BUILD_DIR}kernel.elf" \
         -ex "target remote localhost:1234" &
-    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} -S -s
+    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} -S -s -d int,cpu_reset -no-reboot
 elif [[ ${RUN_QEMU} == true ]]; then
     echo " + Launching QEMU run..."
     qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME}
