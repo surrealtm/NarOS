@@ -29,9 +29,11 @@ s32 cmd_quit(void) {
 static
 s32 cmd_version(void) {
     // @Incomplete: Get the commit, tag and timestamp from the build script...
-    const Str8 info = str8_lit("The kernel is running version v0.0.1.\n");
+    const Str8 source_info = str8_lit("The kernel is running version " KERNEL_BUILD_TAG "." KERNEL_BUILD_COMMIT ".\n");
+    const Str8 build_info = str8_lit("It was built on " KERNEL_BUILD_TIMESTAMP ".\n");
     terminal_set_color(OS_DISPLAY_Cyan, OS_DISPLAY_Black);
-    terminal_print_string(info);
+    terminal_print_string(source_info);
+    terminal_print_string(build_info);
     terminal_reset_color();
     return 0;
 }
