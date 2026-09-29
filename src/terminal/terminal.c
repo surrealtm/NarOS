@@ -108,17 +108,16 @@ void print_unsigned_integer(Terminal *terminal, u64 integer, const OS_Display_Co
 }
 
 static
-void blit_input_string_to_screen(const char *input_string, u32 *cursor_x, u32 *cursor_y) {
+void blit_input_string_to_screen(Str8 input_string, u32 *cursor_x, u32 *cursor_y) {
     const OS_Display_Color foreground = OS_DISPLAY_Bright_White;
     const OS_Display_Color background = OS_DISPLAY_Black;
-    while(*input_string) {
-        os_display_set_character(*cursor_x, *cursor_y, *input_string, foreground, background);
+    for(s32 i = 0; i < input_string.count; ++i) {
+        os_display_set_character(*cursor_x, *cursor_y, input_string.data[i], foreground, background);
         ++(*cursor_x);
         if(*cursor_x == BACKBUFFER_WIDTH) {
             *cursor_x = 0;
             ++(*cursor_y);
         }
-        ++input_string;
     }
 }
 
@@ -126,8 +125,9 @@ static
 void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
-    const char *text_input_prefix  = ">> ";
-    const u32 overflowing_input_lines = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.count) / BACKBUFFER_WIDTH;
+    const Str8 text_input_prefix = str8_lit(">> ");
+    const Str8 text_input_string = text_input_content(&terminal->text_input);
+    const u32 overflowing_input_lines = (terminal->backbuffer_write_x + text_input_prefix.count + terminal->text_input.count) / BACKBUFFER_WIDTH;
 
     // Draw the backbuffer
     for(u32 y = overflowing_input_lines; y < BACKBUFFER_HEIGHT; ++y) {
@@ -140,12 +140,13 @@ void blit_to_screen(const Terminal *terminal) {
     // Draw the input line
     u32 input_write_x = terminal->backbuffer_write_x, input_write_y = terminal->backbuffer_write_y - overflowing_input_lines;
     blit_input_string_to_screen(text_input_prefix, &input_write_x, &input_write_y);
-    blit_input_string_to_screen(terminal->text_input.buffer, &input_write_x, &input_write_y);
+    blit_input_string_to_screen(text_input_string, &input_write_x, &input_write_y);
 
     // Draw the cursor
     {
-        const u32 cursor_x = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKBUFFER_WIDTH;
-        const u32 cursor_y = terminal->backbuffer_write_y - overflowing_input_lines + (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) / BACKBUFFER_WIDTH;
+        const u32 cursor_offset = terminal->backbuffer_write_x + text_input_prefix.count + terminal->text_input.cursor;
+        const u32 cursor_x = cursor_offset % BACKBUFFER_WIDTH;
+        const u32 cursor_y = terminal->backbuffer_write_y - overflowing_input_lines + cursor_offset / BACKBUFFER_WIDTH;
         if(terminal->text_input.cursor == terminal->text_input.count) {
             // The VGA display protocol needs a valid character at this position for it to render the cursor...
             os_display_set_character(cursor_x, cursor_y, ' ', OS_DISPLAY_White, OS_DISPLAY_Black);
@@ -165,16 +166,16 @@ static
 void print_welcome_message(void) {
     os_display_clear(' ', OS_DISPLAY_White);
     terminal_set_color(OS_DISPLAY_Cyan, OS_DISPLAY_Black);
-    terminal_print_string("Welcome to ");
+    terminal_print_string(str8_lit("Welcome to "));
     terminal_set_color(OS_DISPLAY_Light_Cyan, OS_DISPLAY_Black);
-    terminal_print_string("NarOS\n");
+    terminal_print_string(str8_lit("NarOS\n"));
     terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
-    terminal_print_string("This is the terminal interface.\n");
-    terminal_print_string("Type ");
+    terminal_print_string(str8_lit("This is the terminal interface.\n"));
+    terminal_print_string(str8_lit("Type "));
     terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
-    terminal_print_string(":quit");
+    terminal_print_string(str8_lit(":quit"));
     terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
-    terminal_print_string(" to shut down the kernel.\n");
+    terminal_print_string(str8_lit(" to shut down the kernel.\n"));
 }
 
 void terminal_enter(void) {
@@ -193,15 +194,16 @@ void terminal_enter(void) {
             case TEXT_INPUT_SIGNAL_None:
                 wait_for_input();
                 break;
-            case TEXT_INPUT_SIGNAL_Entered:
-                terminal_print_string("> ");
-                terminal_print_string(terminal.text_input.buffer);
-                terminal_print_string("\n");
-                if(compare_strings(terminal.text_input.buffer, ":quit") == 0) {
+            case TEXT_INPUT_SIGNAL_Entered: {
+                const Str8 text_input_string = text_input_content(&terminal.text_input);
+                terminal_print_string(str8_lit("> "));
+                terminal_print_string(text_input_string);
+                terminal_print_string(str8_lit("\n"));
+                if(str8_equals(text_input_string, str8_lit(":quit"))) {
                     os_ctrl_exit();
                 }
                 text_input_clear(&terminal.text_input);
-                break;
+            } break;
         }
     }
 }
@@ -211,9 +213,8 @@ void terminal_set_color(OS_Display_Color foreground, OS_Display_Color background
     terminal.configured_background = background;
 }
 
-void terminal_print_string(const char *string) {
-    while(*string) {
-        write_character(&terminal, *string, terminal.configured_foreground, terminal.configured_background);
-        ++string;
+void terminal_print_string(Str8 string) {
+    for(s32 i = 0; i < string.count; ++i) {
+        write_character(&terminal, string.data[i], terminal.configured_foreground, terminal.configured_background);
     }
 }
