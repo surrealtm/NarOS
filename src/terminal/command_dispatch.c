@@ -39,17 +39,17 @@ s32 cmd_version(void) {
 
 static
 s32 cmd_help(void) {
-    terminal_print_string(str8_lit("--------------------------- Help ---------------------------\n"));
+    terminal_print_string(str8("--------------------------- Help ---------------------------\n"));
     for(u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
         const Command command = commands[cmd_idx];
         terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
         terminal_print_string(command.name);
         terminal_reset_color();
-        terminal_print_string(str8_lit(" // "));
+        terminal_print_string(str8(" // "));
         terminal_print_string(command.description);
-        terminal_print_string(str8_lit("\n"));
+        terminal_print_string(str8("\n"));
     }
-    terminal_print_string(str8_lit("--------------------------- Help ---------------------------\n"));
+    terminal_print_string(str8("--------------------------- Help ---------------------------\n"));
     return 0;
 }
 

@@ -45,7 +45,8 @@ typedef struct Str8 {
     const s32 count;
 } Str8;
 
-#define str8_lit(literal) (Str8) {(const char *) literal, sizeof(literal) - 1}
+#define str8_lit(literal) {literal, sizeof(literal) - 1}
+#define str8(literal) (Str8) str8_lit(literal)
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
