@@ -127,7 +127,7 @@ void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
     const char *text_input_prefix  = ">> ";
-    const u32 overflowing_input_lines = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.count) / BACKBUFFER_WIDTH;
+    const u32 overflowing_input_lines = (terminal->backbuffer_write_x + cstring_length(text_input_prefix) + terminal->text_input.count) / BACKBUFFER_WIDTH;
 
     // Draw the backbuffer
     for(u32 y = overflowing_input_lines; y < BACKBUFFER_HEIGHT; ++y) {
@@ -144,8 +144,8 @@ void blit_to_screen(const Terminal *terminal) {
 
     // Draw the cursor
     {
-        const u32 cursor_x = (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) % BACKBUFFER_WIDTH;
-        const u32 cursor_y = terminal->backbuffer_write_y - overflowing_input_lines + (terminal->backbuffer_write_x + string_length(text_input_prefix) + terminal->text_input.cursor) / BACKBUFFER_WIDTH;
+        const u32 cursor_x = (terminal->backbuffer_write_x + cstring_length(text_input_prefix) + terminal->text_input.cursor) % BACKBUFFER_WIDTH;
+        const u32 cursor_y = terminal->backbuffer_write_y - overflowing_input_lines + (terminal->backbuffer_write_x + cstring_length(text_input_prefix) + terminal->text_input.cursor) / BACKBUFFER_WIDTH;
         if(terminal->text_input.cursor == terminal->text_input.count) {
             // The VGA display protocol needs a valid character at this position for it to render the cursor...
             os_display_set_character(cursor_x, cursor_y, ' ', OS_DISPLAY_White, OS_DISPLAY_Black);
@@ -197,7 +197,7 @@ void terminal_enter(void) {
                 terminal_print_string("> ");
                 terminal_print_string(terminal.text_input.buffer);
                 terminal_print_string("\n");
-                if(compare_strings(terminal.text_input.buffer, ":quit") == 0) {
+                if(compare_cstrings(terminal.text_input.buffer, ":quit") == 0) {
                     os_ctrl_exit();
                 }
                 text_input_clear(&terminal.text_input);

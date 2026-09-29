@@ -84,7 +84,7 @@ u32 *find_extended_bios_data_area_end(const u32 *start) {
 
 static
 b8 validate_table_header(const void *table_header, u32 header_length, const char *expected_signature) {
-    if(compare_memory(table_header, expected_signature, string_length(expected_signature)) != 0) {
+    if(compare_memory(table_header, expected_signature, cstring_length(expected_signature)) != 0) {
         return false;
     }
 
@@ -208,7 +208,7 @@ b8 acpi_initialize(void) {
             for(u32 i = 0; i < address_length; ++i) {
                 const char *address = ((const char *) dsdt) + sizeof(*dsdt) + i;
                 const char *signature = "_S5_";
-                if(compare_memory(address, signature, string_length(signature)) == 0) {
+                if(compare_memory(address, signature, cstring_length(signature)) == 0) {
                     s5_address = address;
                     break;
                 }

@@ -40,8 +40,17 @@ STATIC_ASSERT(sizeof(f64) == 8);
 STATIC_ASSERT(sizeof(f32) == 4);
 STATIC_ASSERT(sizeof(b8)  == 1);
 
+typedef struct Str8 {
+    const char *data;
+    const s32 count;
+} Str8;
+
+Str8 str8_lit(const char *literal);
+Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
+b8 str8_equals(Str8 lhs, Str8 rhs);
+
 void set_memory(void *dst, u8 value, u32 size_in_bytes);
 void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
-s32 compare_strings(const char *lhs, const char *rhs);
-s32 string_length(const char *string);
+s32 compare_cstrings(const char *lhs, const char *rhs);
+s32 cstring_length(const char *string);

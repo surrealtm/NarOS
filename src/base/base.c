@@ -1,5 +1,18 @@
 #include "base.h"
 
+Str8 str8_lit(const char *literal) {
+    return (Str8) { literal, cstring_length(literal) };
+}
+
+Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
+    // @Incomplete: Assert that the string indices are correct.
+    return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
+}
+
+b8 str_equals(Str8 lhs, Str8 rhs) {
+    return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count);
+}
+
 void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
     for(u64 i = 0; i < (u64) size_in_bytes; ++i) {
         ((u8 *) dst)[i] = value;
@@ -26,7 +39,7 @@ s32 compare_memory(const void *lhs, const void *rhs, const u32 size_in_bytes) {
     return 0;
 }
 
-s32 compare_strings(const char *lhs, const char *rhs) {
+s32 compare_cstrings(const char *lhs, const char *rhs) {
     u32 i;
     for(i = 0; lhs[i] != 0 && rhs[i] != 0; ++i) {
         const u8 diff = ((u8 *) lhs)[i] - ((u8 *) rhs)[i];
@@ -35,7 +48,7 @@ s32 compare_strings(const char *lhs, const char *rhs) {
     return lhs[i] - rhs[i];
 }
 
-s32 string_length(const char *string) {
+s32 cstring_length(const char *string) {
     s32 count;
     for(count = 0; string[count]; ++count) {}
     return count;
