@@ -125,6 +125,7 @@ KERNEL_C_SOURCE_FILES=(
     "math/math.c"
     "output/output.c"
     "port/port.c"
+    "terminal/command_dispatch.c"
     "terminal/terminal.c"
     "terminal/text_input.c"
 )

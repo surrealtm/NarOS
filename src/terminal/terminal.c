@@ -2,6 +2,7 @@
 #include "input.h"
 #include "ctrl.h"
 #include "display.h"
+#include "terminal/command_dispatch.h"
 #include "terminal/text_input.h"
 
 #define BACKBUFFER_WIDTH  80
@@ -173,9 +174,9 @@ void print_welcome_message(void) {
     terminal_print_string(str8_lit("This is the terminal interface.\n"));
     terminal_print_string(str8_lit("Type "));
     terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit(":quit"));
+    terminal_print_string(str8_lit(":help"));
     terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit(" to shut down the kernel.\n"));
+    terminal_print_string(str8_lit(" to show the list of available commands.\n"));
 }
 
 void terminal_enter(void) {
@@ -199,8 +200,10 @@ void terminal_enter(void) {
                 terminal_print_string(str8_lit("> "));
                 terminal_print_string(text_input_string);
                 terminal_print_string(str8_lit("\n"));
-                if(str8_equals(text_input_string, str8_lit(":quit"))) {
-                    os_ctrl_exit();
+                if(!dispatch_command(text_input_string)) {
+                    terminal_set_color(OS_DISPLAY_Red, OS_DISPLAY_Black);
+                    terminal_print_string(str8_lit("Unknown command. Please try :help\n"));
+                    terminal_reset_color();
                 }
                 text_input_clear(&terminal.text_input);
             } break;
@@ -211,6 +214,10 @@ void terminal_enter(void) {
 void terminal_set_color(OS_Display_Color foreground, OS_Display_Color background) {
     terminal.configured_foreground = foreground;
     terminal.configured_background = background;
+}
+
+void terminal_reset_color(void) {
+    terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
 }
 
 void terminal_print_string(Str8 string) {
