@@ -2,6 +2,7 @@
 #include "input.h"
 #include "ctrl.h"
 #include "display.h"
+#include "terminal/command_dispatch.h"
 #include "terminal/text_input.h"
 
 #define BACKBUFFER_WIDTH  80
@@ -125,7 +126,7 @@ static
 void blit_to_screen(const Terminal *terminal) {
     os_display_clear(' ', OS_DISPLAY_White);
 
-    const Str8 text_input_prefix = str8_lit(">> ");
+    const Str8 text_input_prefix = str8(">> ");
     const Str8 text_input_string = text_input_content(&terminal->text_input);
     const u32 overflowing_input_lines = (terminal->backbuffer_write_x + text_input_prefix.count + terminal->text_input.count) / BACKBUFFER_WIDTH;
 
@@ -166,16 +167,16 @@ static
 void print_welcome_message(void) {
     os_display_clear(' ', OS_DISPLAY_White);
     terminal_set_color(OS_DISPLAY_Cyan, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit("Welcome to "));
+    terminal_print_string(str8("Welcome to "));
     terminal_set_color(OS_DISPLAY_Light_Cyan, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit("NarOS\n"));
+    terminal_print_string(str8("NarOS\n"));
     terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit("This is the terminal interface.\n"));
-    terminal_print_string(str8_lit("Type "));
+    terminal_print_string(str8("This is the terminal interface.\n"));
+    terminal_print_string(str8("Type "));
     terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit(":quit"));
+    terminal_print_string(str8(":help"));
     terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
-    terminal_print_string(str8_lit(" to shut down the kernel.\n"));
+    terminal_print_string(str8(" to show the list of available commands.\n"));
 }
 
 void terminal_enter(void) {
@@ -196,11 +197,13 @@ void terminal_enter(void) {
                 break;
             case TEXT_INPUT_SIGNAL_Entered: {
                 const Str8 text_input_string = text_input_content(&terminal.text_input);
-                terminal_print_string(str8_lit("> "));
+                terminal_print_string(str8("> "));
                 terminal_print_string(text_input_string);
-                terminal_print_string(str8_lit("\n"));
-                if(str8_equals(text_input_string, str8_lit(":quit"))) {
-                    os_ctrl_exit();
+                terminal_print_string(str8("\n"));
+                if(!dispatch_command(text_input_string)) {
+                    terminal_set_color(OS_DISPLAY_Red, OS_DISPLAY_Black);
+                    terminal_print_string(str8("Unknown command. Please try :help\n"));
+                    terminal_reset_color();
                 }
                 text_input_clear(&terminal.text_input);
             } break;
@@ -211,6 +214,10 @@ void terminal_enter(void) {
 void terminal_set_color(OS_Display_Color foreground, OS_Display_Color background) {
     terminal.configured_foreground = foreground;
     terminal.configured_background = background;
+}
+
+void terminal_reset_color(void) {
+    terminal_set_color(OS_DISPLAY_White, OS_DISPLAY_Black);
 }
 
 void terminal_print_string(Str8 string) {

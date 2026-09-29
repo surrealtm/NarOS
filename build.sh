@@ -73,6 +73,19 @@ for ARGUMENT in "$@"; do
 done
 
 # ----------------------------------------------------------------------------------------------------------------
+# Build Environment Parsing
+# ----------------------------------------------------------------------------------------------------------------
+
+BUILD_COMMIT=$(git rev-parse --short HEAD)
+if [[ -n "$(git status --porcelain)" ]]; then
+    BUILD_COMMIT=${BUILD_COMMIT}"+"
+fi
+BUILD_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+BUILD_TIMESTAMP=$(date)
+
+echo "Building: Commit = '${BUILD_COMMIT}', Tag = '${BUILD_TAG}', Date = '${BUILD_TIMESTAMP}'"
+
+# ----------------------------------------------------------------------------------------------------------------
 # Log Build Configuration
 # ----------------------------------------------------------------------------------------------------------------
 if [[ ${DEBUG_QEMU} == true ]]; then
@@ -103,16 +116,42 @@ object_file_path() {
 # ----------------------------------------------------------------------------------------------------------------
 # Build the Kernel
 # ----------------------------------------------------------------------------------------------------------------
-KERNEL_LINKER_OPTIONS="-m elf_i386 -nostdlib -T linker.ld -e kernel_main"
-KERNEL_ASSEMBLER_OPTIONS="-f elf"
-KERNEL_COMPILER_OPTIONS="-std=c99 -pedantic -Wall -Wextra -Werror -m32 -mno-sse -mno-sse2 -mno-mmx -ffreestanding -fno-stack-protector -fno-pie -fno-pic -fno-builtin -I${INCLUDE_DIR} -I${SOURCE_DIR}"
+KERNEL_ASSEMBLER_OPTIONS=(-f elf)
+KERNEL_COMPILER_OPTIONS=(
+    -std=c99
+    -pedantic
+    -Wall
+    -Wextra
+    -Werror
+    -m32
+    -mno-sse
+    -mno-sse2
+    -mno-mmx
+    -ffreestanding
+    -fno-stack-protector
+    -fno-pie
+    -fno-pic
+    -fno-builtin
+    -I${INCLUDE_DIR}
+    -I${SOURCE_DIR}
+    "-DKERNEL_BUILD_COMMIT=\"${BUILD_COMMIT}\""
+    "-DKERNEL_BUILD_TAG=\"${BUILD_TAG}\""
+    "-DKERNEL_BUILD_TIMESTAMP=\"${BUILD_TIMESTAMP}\""
+)
+KERNEL_LINKER_OPTIONS=(
+    -m elf_i386
+    -nostdlib
+    -T linker.ld
+    -e kernel_main
+)
+
 if [[ ${DEBUG_QEMU} == true ]]; then
-    KERNEL_COMPILER_OPTIONS="${KERNEL_COMPILER_OPTIONS} -g -O0"
+    KERNEL_COMPILER_OPTIONS+=(-g -O0)
 else
-    KERNEL_COMPILER_OPTIONS="${KERNEL_COMPILER_OPTIONS} -O3"
+    KERNEL_COMPILER_OPTIONS+=(-O3)
 fi
 
-echo " + Compiling the kernel with options: ${KERNEL_COMPILER_OPTIONS}"
+echo " + Compiling the kernel with options: ${KERNEL_COMPILER_OPTIONS[@]}"
 
 KERNEL_C_SOURCE_FILES=(
     "acpi/acpi.c"
@@ -125,6 +164,7 @@ KERNEL_C_SOURCE_FILES=(
     "math/math.c"
     "output/output.c"
     "port/port.c"
+    "terminal/command_dispatch.c"
     "terminal/terminal.c"
     "terminal/text_input.c"
 )
@@ -138,17 +178,17 @@ KERNEL_OBJECT_FILES=""
 
 for FILEPATH in "${KERNEL_ASM_SOURCE_FILES[@]}"; do
     OBJECT_FILE=$(object_file_path ${FILEPATH})
-    ${ASSEMBLER} ${KERNEL_ASSEMBLER_OPTIONS} ${SOURCE_DIR}${FILEPATH} -o ${OBJECT_FILE}
+    ${ASSEMBLER} "${KERNEL_ASSEMBLER_OPTIONS[@]}" ${SOURCE_DIR}${FILEPATH} -o ${OBJECT_FILE}
     KERNEL_OBJECT_FILES="${KERNEL_OBJECT_FILES} ${OBJECT_FILE}"
 done
 
 for FILEPATH in "${KERNEL_C_SOURCE_FILES[@]}"; do
     OBJECT_FILE=$(object_file_path ${FILEPATH})
-    ${COMPILER} ${KERNEL_COMPILER_OPTIONS} ${SOURCE_DIR}${FILEPATH} -c -o ${OBJECT_FILE}
+    ${COMPILER} "${KERNEL_COMPILER_OPTIONS[@]}" ${SOURCE_DIR}${FILEPATH} -c -o ${OBJECT_FILE}
     KERNEL_OBJECT_FILES="${KERNEL_OBJECT_FILES} ${OBJECT_FILE}"
 done
 
-ld ${KERNEL_LINKER_OPTIONS} ${KERNEL_OBJECT_FILES} -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
+ld "${KERNEL_LINKER_OPTIONS[@]}" ${KERNEL_OBJECT_FILES} -o ${BUILD_DIR}kernel.elf # This elf file is used for debugging
 objcopy -O binary ${BUILD_DIR}kernel.elf ${BUILD_DIR}kernel.bin
 
 # ----------------------------------------------------------------------------------------------------------------

@@ -1,9 +1,5 @@
 #include "base.h"
 
-Str8 str8_lit(const char *literal) {
-    return (Str8) { literal, cstring_length(literal) };
-}
-
 Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
     // @Incomplete: Assert that the string indices are correct.
     return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
