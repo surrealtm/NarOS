@@ -36,12 +36,12 @@ u32 find_control_point_to_the_right(const Text_Input *text_input) {
 }
 
 static
-void insert_text(Text_Input *text_input, const char *bytes, const u32 requested_byte_count) {
-    const u32 byte_count = min(requested_byte_count, ARRAY_COUNT(text_input->buffer) - text_input->count - 1); // Ensure that the last character in the buffer remains 0 as we're working with null-terminated strings...
-    move_memory(&text_input->buffer[text_input->cursor + byte_count], &text_input->buffer[text_input->cursor], text_input->count - text_input->cursor);
-    move_memory(&text_input->buffer[text_input->cursor], bytes, byte_count);
-    text_input->cursor += byte_count;
-    text_input->count += byte_count;
+void insert_text(Text_Input *text_input, const Str8 string) {
+    const u32 copied_character_count = min(string.count, (s32) (ARRAY_COUNT(text_input->buffer) - text_input->count - 1)); // Ensure that the last character in the buffer remains 0 as we're working with null-terminated strings...
+    move_memory(&text_input->buffer[text_input->cursor + copied_character_count], &text_input->buffer[text_input->cursor], text_input->count - text_input->cursor);
+    move_memory(&text_input->buffer[text_input->cursor], string.data, copied_character_count);
+    text_input->cursor += copied_character_count;
+    text_input->count  += copied_character_count;
 }
 
 static
@@ -107,10 +107,15 @@ Text_Input_Signal text_input_update(Text_Input *text_input) {
                 if(event.data.keyboard.key_code == OS_INPUT_KEY_C && event.data.keyboard.modifiers & OS_INPUT_KEYBOARD_MODIFIERS_Control) {
                     text_input_clear(text_input);
                 } else if(event.data.keyboard.utf32 >= 0x20 && event.data.keyboard.utf32 < 0xff) {
-                    insert_text(text_input, (const char *) &event.data.keyboard.utf32, 1);
+                    Str8 string = (Str8) { (const char *) &event.data.keyboard.utf32, 1 };
+                    insert_text(text_input, string);
                 }
         }
     }
 
     return signal;
+}
+
+Str8 text_input_content(const Text_Input *text_input) {
+    return (Str8) { text_input->buffer, text_input->count };
 }

@@ -9,8 +9,8 @@ Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
     return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
 }
 
-b8 str_equals(Str8 lhs, Str8 rhs) {
-    return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count);
+b8 str8_equals(const Str8 lhs, const Str8 rhs) {
+    return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count) == 0;
 }
 
 void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
