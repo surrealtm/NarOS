@@ -205,7 +205,7 @@ ${ASSEMBLER} ${SOURCE_DIR}boot_loader/boot_loader.asm ${BOOT_LOADER_ASSEMBLER_OP
 # ----------------------------------------------------------------------------------------------------------------
 # Assemble Final Image
 # ----------------------------------------------------------------------------------------------------------------
-echo " + Assembling the final image"
+echo " + Assembling the final image ${BUILD_DIR}${IMAGE_NAME}"
 cat ${BUILD_DIR}boot_loader.bin ${BUILD_DIR}kernel.bin >${BUILD_DIR}${IMAGE_NAME}
 
 # ----------------------------------------------------------------------------------------------------------------
