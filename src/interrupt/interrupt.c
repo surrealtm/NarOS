@@ -135,9 +135,8 @@ void interrupt_register_callback(Interrupt_Signal signal, Interrupt_Callback cal
     if(signal < 0 || signal >= ARRAY_COUNT(interrupt_callbacks)) {
         return;
     }
-    // @Incomplete: Implement a simple assertion function
-    //assert(interrupt_callbacks[signal] == null && "Registered multiple callbacks for the same signal.");
-    //assert(has_interrupt_handler(signal) && "Tried to register a callback for an unhandled signal.");
+    assert(interrupt_callbacks[signal] == null, "Registered multiple callbacks for the same signal.");
+    assert(has_interrupt_handler(signal), "Tried to register a callback for an unhandled signal.");
     (void) has_interrupt_handler;
     interrupt_callbacks[signal] = callback;
 }

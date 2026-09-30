@@ -12,6 +12,12 @@
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
 
+#if ENABLE_ASSERTIONS
+# define assert(condition, reason) if(!(condition)) panic(str8(reason))
+#else
+# define assert(condition, reason) {}
+#endif
+
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;
@@ -49,6 +55,8 @@ typedef struct Str8 {
 #define str8(literal) (Str8) str8_lit(literal)
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
+
+void panic(Str8 reason);
 
 void set_memory(void *dst, u8 value, u32 size_in_bytes);
 void move_memory(void *dst, const void *src, u32 size_in_bytes);
