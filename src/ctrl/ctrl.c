@@ -1,4 +1,5 @@
 #include "ctrl.h"
+#include "ctrl_kernel.h"
 #include "interrupt/interrupt.h"
 #include "acpi/acpi.h"
 

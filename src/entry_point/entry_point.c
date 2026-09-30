@@ -4,6 +4,7 @@
 #include "input.h"
 
 #include "acpi/acpi.h"
+#include "ctrl/ctrl_kernel.h"
 #include "input/input_kernel.h"
 #include "interrupt/interrupt.h"
 #include "terminal/terminal.h"
