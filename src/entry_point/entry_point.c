@@ -13,6 +13,7 @@
  * the kernel.
  */
 int kernel_entry_point(void) {
+    assert(false, "Hello World");
     interrupt_initialize();
     input_initialize();
     acpi_initialize();

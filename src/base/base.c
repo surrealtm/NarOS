@@ -1,12 +1,19 @@
 #include "base.h"
 
 Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
-    // @Incomplete: Assert that the string indices are correct.
+    assert(first_idx >= 0 && first_idx < base.count && last_idx >= first_idx && last_idx < base.count, "String indices are out of bounds.");
     return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
 }
 
 b8 str8_equals(const Str8 lhs, const Str8 rhs) {
     return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count) == 0;
+}
+
+void panic(const Str8 reason) {
+    // @Incomplete: We probably can't rely on the kernel actually still working at this point.
+    // Maybe use assembly to print out an assertion string here?...
+    (void) reason;
+    __asm__ volatile ("int3");
 }
 
 void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
