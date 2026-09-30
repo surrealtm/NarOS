@@ -1,7 +1,8 @@
 #include "terminal.h"
 #include "input.h"
-#include "ctrl.h"
 #include "display.h"
+#include "ctrl.h"
+#include "ctrl/ctrl_kernel.h"
 #include "terminal/command_dispatch.h"
 #include "terminal/text_input.h"
 
