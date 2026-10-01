@@ -61,11 +61,19 @@ entry_point:
     mov sp, 0x7c00
     mov [BOOT_DRIVE], dl
 
+    call initialize_vga
+
     mov si, INITIALIZATION_MSG
     call print_string
 
     call load_kernel_from_disk
     call invoke_kernel ; This function will never return, as we've entered 32 bit mode...
+
+initialize_vga:
+    mov ah, 0x0
+    mov al, VGA_DISPLAY_MODE
+    int 0x10
+    ret
 
 print_string:
     mov ah, 0x0e
@@ -132,6 +140,10 @@ invoke_kernel:
 .call_kernel_entry_point:
     mov ebp, 0x90000 ; Set up the stack pointer
     mov esp, ebp
+    ; Set up the Boot_Loader_Info struct on the stack. Careful: The `kernel_main` function needs to copy this struct!
+    mov al, [BOOT_DRIVE]
+    mov [esp + 0x0], al
+    mov dword [esp + 0x4], dword VGA_DISPLAY_MODE
     call KERNEL_OFFSET
     call halt ; We don't expect the kernel to ever return, but just to be sure...
 [bits 16]
@@ -175,6 +187,7 @@ INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
 KERNEL_EXIT_MSG    db "The kernel has exited.", 0xd, 0xa, 0x0
+VGA_DISPLAY_MODE   equ 0x2 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
 BOOT_DRIVE db 0
 times 510 - ($ - $$) db 0 ; Align the entire boot loader binary to 510 bytes
 dw 0xaa55 ; Magic number at the end identifying this as a boot loader program and aligning the entire binary to 512 bytes
