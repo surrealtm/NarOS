@@ -187,7 +187,7 @@ INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
 DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
 KERNEL_EXIT_MSG    db "The kernel has exited.", 0xd, 0xa, 0x0
-VGA_DISPLAY_MODE   equ 0x02 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
+VGA_DISPLAY_MODE   equ 0x2 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
 BOOT_DRIVE db 0
 times 510 - ($ - $$) db 0 ; Align the entire boot loader binary to 510 bytes
 dw 0xaa55 ; Magic number at the end identifying this as a boot loader program and aligning the entire binary to 512 bytes
