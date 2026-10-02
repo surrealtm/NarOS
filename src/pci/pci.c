@@ -6,7 +6,7 @@
 #define PCI_DATA       0xcfc
 #define BUS_COUNT      256
 #define SLOT_COUNT     32
-#define FUNCTION_COUNT 7
+#define FUNCTION_COUNT 8
 
 typedef enum Class_Code {
     CLASS_Mass_Storage_Device = 0x1,
@@ -21,9 +21,9 @@ typedef enum Serial_Bus_Controller_Subclass {
     SERIAL_BUS_CONTROLLER_USB = 0x3,
 } Serial_Bus_Controller_Subclass;
 
-typedef enum Serial_Bus_USB_Controller_Revision {
-    SERIAL_BUS_USB_CONTROLLER_XHCI = 0x30,
-} Serial_Bus_USB_Controller_Revision;
+typedef enum Serial_Bus_USB_Controller_Program_Interface {
+    SERIAL_BUS_USB_CONTROLLER_UHCI = 0x0,
+} Serial_Bus_USB_Controller_Program_Interface;
 
 static inline
 u32 calculate_address(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
@@ -46,11 +46,6 @@ u16 read_configuration_word(const u8 bus, const u8 slot, const u8 function, cons
 }
 
 static
-u8 read_configuration_byte(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
-    return read_configuration_word(bus, slot, function, offset) & 0xff;
-}
-
-static
 void set_bar_address(const u8 bus, const u8 slot, const u8 function, const u8 bar_number, const u32 result) {
     const u32 first_part = result & 0xffff;
     const u32 second_part = (result >> 16) & 0xffff;
@@ -66,7 +61,7 @@ u32 get_bar_address(const u8 bus, const u8 slot, const u8 function, const u8 bar
 }
 
 static
-void initialize_mass_storage_device(const u8 subclass) {
+void initialize_mass_storage_device(const Mass_Storage_Device_Subclass subclass) {
     switch(subclass) {
         case MASS_STORAGE_DEVICE_IDE_Controller:
             os_output_print(str8("Found an IDE Controller!\n"));
@@ -75,19 +70,19 @@ void initialize_mass_storage_device(const u8 subclass) {
 }
 
 static
-void initialize_serial_bus_usb_controller(const u8 revision) {
-    switch(revision) {
-        case SERIAL_BUS_USB_CONTROLLER_XHCI:
-            os_output_print(str8("Found an XHCI Controller!\n"));
+void initialize_serial_bus_usb_controller(const Serial_Bus_USB_Controller_Program_Interface interface) {
+    switch(interface) {
+        case SERIAL_BUS_USB_CONTROLLER_UHCI:
+            os_output_print(str8("Found an UHCI Controller!\n"));
             break;
     }
 }
 
 static
-void initialize_serial_bus_controller(const u8 subclass, const u8 revision) {
+void initialize_serial_bus_controller(const Serial_Bus_Controller_Subclass subclass, const u8 interface) {
     switch(subclass) {
         case SERIAL_BUS_CONTROLLER_USB:
-            initialize_serial_bus_usb_controller(revision);
+            initialize_serial_bus_usb_controller(interface);
             break;
     }
 }
@@ -103,15 +98,17 @@ void pci_initialize(void) {
                 const u16 device = read_configuration_word(bus, slot, function, 0x2);
                 if(vendor == 0xffff) continue;
 
-                const u8 class_code = read_configuration_byte(bus, slot, function, 0xb);
-                const u8 subclass   = read_configuration_byte(bus, slot, function, 0xa);
-                const u8 revision   = read_configuration_byte(bus, slot, function, 0x8);
+                const u16 class_and_subclass    = read_configuration_word(bus, slot, function, 0xa);
+                const u8 interface_and_revision = read_configuration_word(bus, slot, function, 0x8);
+                const u8 class_code = (class_and_subclass >> 8) & 0xff;
+                const u8 subclass   = (class_and_subclass >> 0) & 0xff;
+                const u8 interface  = (interface_and_revision >> 8) & 0xff;
 
                 (void) device;
 
                 switch(class_code) {
                     case CLASS_Serial_Bus_Controller:
-                        initialize_serial_bus_controller(subclass, revision);
+                        initialize_serial_bus_controller(subclass, interface);
                         break;
                     case CLASS_Mass_Storage_Device:
                         initialize_mass_storage_device(subclass);

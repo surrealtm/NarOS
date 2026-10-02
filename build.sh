@@ -228,16 +228,30 @@ if [[ ${CHECK_HEADERS} == true ]]; then
 fi
 
 # ----------------------------------------------------------------------------------------------------------------
+# USB Drive for QEMU
+# ----------------------------------------------------------------------------------------------------------------
+QEMU_USB_DRIVE_PARAMETERS=""
+if [[ ${DEBUG_QEMU} == true || ${RUN_QEMU} == true ]]; then
+    echo " + Preparing the fake USB drive for QEMU..."
+    # Create a temporary file that QEMU can mount as the disk content
+    HOST_PATH="/tmp/qemu_usb_drive.img"
+    dd if=/dev/zero of=${HOST_PATH} bs=1M count=16 >/dev/null 2>&1
+    QEMU_USB_DRIVE_PARAMETERS="-device piix3-usb-uhci,id=uhci"
+fi
+
+# ----------------------------------------------------------------------------------------------------------------
 # Launch QEMU
 # ----------------------------------------------------------------------------------------------------------------
+QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_DRIVE_PARAMETERS} -monitor stdio"
+
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
     $TERMINAL -e gdb \
         -ex "set confirm off" \
         -ex "file ${BUILD_DIR}kernel.elf" \
         -ex "target remote localhost:1234" &
-    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} -S -s -d int,cpu_reset -no-reboot
+    qemu-system-i386 ${QEMU_PARAMETERS} -S -s -d int,cpu_reset -no-reboot
 elif [[ ${RUN_QEMU} == true ]]; then
     echo " + Launching QEMU run..."
-    qemu-system-i386 -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME}
+    qemu-system-i386 ${QEMU_PARAMETERS}
 fi
