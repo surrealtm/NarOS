@@ -163,6 +163,7 @@ KERNEL_C_SOURCE_FILES=(
     "interrupt/interrupt.c"
     "math/math.c"
     "output/output.c"
+    "pci/pci.c"
     "port/port.c"
     "terminal/command_dispatch.c"
     "terminal/terminal.c"
