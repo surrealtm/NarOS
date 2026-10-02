@@ -8,6 +8,7 @@
 #include "display/display_kernel.h"
 #include "input/input_kernel.h"
 #include "interrupt/interrupt.h"
+#include "pci/pci.h"
 #include "terminal/terminal.h"
 
 typedef struct Boot_Info {
@@ -21,10 +22,12 @@ typedef struct Boot_Info {
  */
 int kernel_entry_point(const Boot_Info boot_info) {
     display_initialize(boot_info.vga_display_mode);
+    terminal_initialize();
     interrupt_initialize();
     input_initialize();
     acpi_initialize();
-    terminal_enter();
+    pci_initialize();
+    terminal_run();
     os_ctrl_shut_down();
     return 0;
 }
