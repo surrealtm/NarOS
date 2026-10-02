@@ -164,6 +164,7 @@ KERNEL_C_SOURCE_FILES=(
     "math/math.c"
     "output/output.c"
     "pci/pci.c"
+    "pci/uhci.c"
     "port/port.c"
     "terminal/command_dispatch.c"
     "terminal/terminal.c"
