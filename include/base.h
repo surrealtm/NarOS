@@ -7,6 +7,8 @@
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
 
 // The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
+// These helpers shall be used when interacting with hardware that does direct memory access - whereas the
+// kernel code might use virtual paging later
 #define PHYSICAL_ADDRESS(pointer) ((u32) pointer)
 #define VIRTUAL_ADDRESS(pointer)  ((void *) pointer)
 
@@ -17,11 +19,8 @@
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
 
-#if ENABLE_ASSERTIONS
-# define assert(condition, reason) if(!(condition)) panic(str8(reason))
-#else
-# define assert(condition, reason) {}
-#endif
+// @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
+#define assert(condition, reason) if(!(condition)) panic(str8(reason))
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
