@@ -5,7 +5,10 @@
 
 #define PACKED_STRUCT __attribute__((packed))
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
-#define PHYSICAL_ADDRESS(pointer) ((u32) pointer) // The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
+
+// The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
+#define PHYSICAL_ADDRESS(pointer) ((u32) pointer)
+#define VIRTUAL_ADDRESS(pointer)  ((void *) pointer)
 
 #define true 1
 #define false 0

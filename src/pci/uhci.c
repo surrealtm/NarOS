@@ -3,17 +3,84 @@
 #include "ctrl.h"
 #include "port/port.h"
 
-#define WAIT_INTERVAL_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
+#define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
 // ---------------------------------------------------------------------------------------------------------------
 // UHCI Types
 // ---------------------------------------------------------------------------------------------------------------
 
-#define UHCI_COMMAND_HALT        0
-#define UHCI_COMMAND_START      (1 << 0)
-#define UHCI_COMMAND_HOST_RESET (1 << 1)
+typedef enum UHCI_Command {
+    UHCI_COMMAND_Halt       = 0x0,
+    UHCI_COMMAND_Start      = 1 << 0,
+    UHCI_COMMAND_Host_Reset = 1 << 1,
+} UHCI_Command;
 
+typedef enum UHCI_Packet_Type {
+    UHCI_PACKET_Setup = 0x2d,
+    UHCI_PACKET_Out   = 0xe1,
+    UHCI_PACKET_In    = 0xe9,
+} UHCI_Packet_Type;
+
+typedef enum UHCI_Memory_Structure_Type {
+    UHCI_MEMORY_STRUCTURE_Transfer_Descriptor = 0x0,
+    UHCI_MEMORY_STRUCTURE_Queue_Head          = 0x1,
+} UHCI_Memory_Structure_Type;
+
+typedef struct UHCI_Transfer_Descriptor_Link {
+    u32 terminate : 1;
+    UHCI_Memory_Structure_Type memory_structure_type : 1;
+    u32 depth_first : 1;
+    u32 reserved : 1;
+    u32 pointer : 28;
+} UHCI_Transfer_Descriptor_Link;
+
+typedef struct UHCI_Transfer_Descriptor_Status {
+    u32 length : 11;
+    u32 reserved0 : 6;
+    u32 bit_error : 1;
+    u32 timeout_crc : 1;
+    u32 non_acknowledged : 1;
+    u32 babble_detected : 1;
+    u32 data_buffer_error : 1;
+    u32 stalled : 1;
+    u32 active : 1;
+    u32 interrupt_on_complete : 1;
+    u32 is_isochronous : 1;
+    u32 low_speed : 1;
+    u32 error_counter : 2;
+    u32 short_packet_detect : 1;
+    u32 reserved1 : 2;
+} UHCI_Transfer_Descriptor_Status;
+
+typedef struct UHCI_Transfer_Descriptor_Packet_Header {
+    UHCI_Packet_Type packet_type : 8;
+    u32 device : 7;
+    u32 endpoint : 4;
+    u32 data_toggle : 1;
+    u32 reserved : 1;
+    u32 maximum_length : 11;
+} UHCI_Transfer_Descriptor_Packet_Header;
+
+typedef struct UHCI_Transfer_Descriptor {
+    UHCI_Transfer_Descriptor_Link link;
+    UHCI_Transfer_Descriptor_Status status;
+    UHCI_Transfer_Descriptor_Packet_Header packet_header;
+    u32 buffer_address;
+    u8  reserved[16];
+} PACKED_STRUCT UHCI_Transfer_Descriptor;
+
+typedef struct UHCI_Frame_List_Entry {
+    u32 terminate : 1;
+    UHCI_Memory_Structure_Type memory_structure_type : 1;
+    u32 reserved : 2;
+    u32 pointer : 28;
+} UHCI_Frame_List_Entry;
+
+typedef struct UHCI_Queue_Head {
+    UHCI_Frame_List_Entry vertical_pointer;
+    UHCI_Frame_List_Entry horizontal_pointer;
+} PACKED_STRUCT UHCI_Queue_Head;
 
 // ---------------------------------------------------------------------------------------------------------------
 // UHCI Interaction
@@ -28,7 +95,7 @@ b8 wait_for_status(const UHCI_Controller *controller, Status_Check check) {
         if(check(controller)) {
             return true;
         }
-        os_ctrl_sleep(WAIT_INTERVAL_NANOSECONDS);
+        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
     }
     return false;
 }
@@ -78,6 +145,43 @@ b8 check_port_connectivity(const UHCI_Controller *controller, const u32 port_idx
     return port_read_u16(controller->ports[port_idx]) & 0x1;
 }
 
+static inline
+b8 transfer_descriptor_has_error(const UHCI_Transfer_Descriptor *descriptor) {
+    return descriptor->status.bit_error || descriptor->status.timeout_crc || descriptor->status.babble_detected || descriptor->status.data_buffer_error || descriptor->status.stalled;
+}
+
+static
+void clear_frame_list(UHCI_Controller *controller) {
+    for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
+        controller->frame_list[i] = 1;
+    }
+}
+
+static
+b8 submit_queue(UHCI_Controller *controller, const volatile UHCI_Transfer_Descriptor *descriptor_table) {
+    const UHCI_Queue_Head queue_head = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = PHYSICAL_ADDRESS(descriptor_table) } };
+
+    // Make this queue live on the controller so that the descriptors should be executed
+    for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
+        controller->frame_list[i] = PHYSICAL_ADDRESS(&queue_head);
+    }
+
+    // Wait until the controller has executed all descriptors in our queue
+    b8 successful = true;
+    while(successful && queue_head.vertical_pointer.terminate == false) {
+        const UHCI_Transfer_Descriptor *current_descriptor = VIRTUAL_ADDRESS(queue_head.vertical_pointer.pointer);
+        if(current_descriptor->status.active == false && transfer_descriptor_has_error(current_descriptor)) {
+            successful = false;
+            break;
+        }
+
+        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+    }
+
+    clear_frame_list(controller);
+    return successful;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
@@ -89,17 +193,14 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
         controller->ports[i] = controller->pci_address + 0x10 + (i * 2);
     }
 
-    // Initialize the frame list to only consist of "terminate" commands
-    for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        controller->frame_list[i] = 1;
-    }
+    clear_frame_list(controller);
 
-    issue_command(controller, UHCI_COMMAND_HALT);
+    issue_command(controller, UHCI_COMMAND_Halt);
     if(!wait_for_status(controller, is_halted)) {
         return false;
     }
 
-    issue_command(controller, UHCI_COMMAND_HOST_RESET);
+    issue_command(controller, UHCI_COMMAND_Host_Reset);
     if(!wait_for_status(controller, is_host_reset)) {
         return false;
     }
@@ -109,7 +210,16 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     write_frame_list_pointer(controller, controller->frame_list);
     write_frame_number(controller, 0x0);
     write_frame_timing(controller, 0x40);
-    issue_command(controller, UHCI_COMMAND_START);
+    issue_command(controller, UHCI_COMMAND_Start);
 
     return check_port_connectivity(controller, 0);
+}
+
+b8 uhci_bulk_out(UHCI_Controller *controller, const void *data, u32 size_in_bytes) {
+    // @Incomplete
+    (void) controller;
+    (void) data;
+    (void) size_in_bytes;
+    (void) submit_queue;
+    return false;
 }
