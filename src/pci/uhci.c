@@ -6,7 +6,7 @@
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 #define TRANSFER_DESCRIPTOR_PAYLOAD_SIZE 32
-#define REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes) ((size_in_bytes / (size_in_bytes) + 1) / TRANSFER_DESCRIPTOR_PAYLOAD_SIZE)
+#define REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes) (size_in_bytes / (TRANSFER_DESCRIPTOR_PAYLOAD_SIZE + 1) + 1)
 
 // ---------------------------------------------------------------------------------------------------------------
 // UHCI Types
@@ -164,8 +164,9 @@ b8 submit_queue(UHCI_Controller *controller, const volatile UHCI_Transfer_Descri
     const UHCI_Queue_Head queue_head = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = PHYSICAL_ADDRESS(descriptor_table) } };
 
     // Make this queue live on the controller so that the descriptors should be executed
+    UHCI_Transfer_Descriptor_Link link_to_queue = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = PHYSICAL_ADDRESS(&queue_head) };
     for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        controller->frame_list[i] = PHYSICAL_ADDRESS(&queue_head);
+        controller->frame_list[i] = PHYSICAL_ADDRESS(&link_to_queue);
     }
 
     // Wait until the controller has executed all descriptors in our queue
@@ -219,8 +220,7 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
 }
 
 b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device, const u8 endpoint, const void *data, u32 size_in_bytes) {
-    const u32 descriptor_list_capacity = REQUIRED_TRANSFER_DESCRIPTORS(512);
-    UHCI_Transfer_Descriptor descriptor_list[descriptor_list_capacity];
+    UHCI_Transfer_Descriptor descriptor_list[REQUIRED_TRANSFER_DESCRIPTORS(512)];
 
     const u32 required_descriptor_count = size_in_bytes / (TRANSFER_DESCRIPTOR_PAYLOAD_SIZE + 1) + 1;
     assert(required_descriptor_count < ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk write was reached.");
@@ -240,8 +240,7 @@ b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device, const u8 endpoi
 }
 
 b8 uhci_control(UHCI_Controller *controller, void *header_data, const u32 header_size_in_bytes, void *payload, const u32 payload_size_in_bytes) {
-    const u32 descriptor_list_capacity = REQUIRED_TRANSFER_DESCRIPTORS(32);
-    UHCI_Transfer_Descriptor descriptor_list[descriptor_list_capacity];
+    UHCI_Transfer_Descriptor descriptor_list[REQUIRED_TRANSFER_DESCRIPTORS(32) + 2];
     u32 descriptor_idx = 0;
 
     // SETUP Transfer Descriptor
@@ -278,8 +277,7 @@ b8 uhci_control(UHCI_Controller *controller, void *header_data, const u32 header
 }
 
 b8 uhci_bulk_read(UHCI_Controller *controller, const u8 device, const u8 endpoint, void *data, const u32 size_in_bytes) {
-    const u32 descriptor_list_capacity = REQUIRED_TRANSFER_DESCRIPTORS(512);
-    UHCI_Transfer_Descriptor descriptor_list[descriptor_list_capacity];
+    UHCI_Transfer_Descriptor descriptor_list[REQUIRED_TRANSFER_DESCRIPTORS(512)];
 
     const u32 required_descriptor_count = size_in_bytes / (TRANSFER_DESCRIPTOR_PAYLOAD_SIZE + 1) + 1;
     assert(required_descriptor_count < ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk write was reached.");

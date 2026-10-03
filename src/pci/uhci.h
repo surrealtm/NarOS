@@ -6,8 +6,8 @@
 #define UHCI_PORT_CAPACITY 2
 
 typedef struct UHCI_Controller {
+    u32 frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(1024);
     u32 pci_address;
-    u32 frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(16);
     u32 ports[UHCI_PORT_CAPACITY];
     u8 current_data_toggle;
 } UHCI_Controller;
