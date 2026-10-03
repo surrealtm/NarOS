@@ -8,6 +8,11 @@
 #define TRANSFER_DESCRIPTOR_PAYLOAD_SIZE 32
 #define REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes) (size_in_bytes / (TRANSFER_DESCRIPTOR_PAYLOAD_SIZE + 1) + 1)
 
+// To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
+// the bit representation
+#define TRANSFER_DESCRIPTOR_ADDRESS(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
+#define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
+
 // ---------------------------------------------------------------------------------------------------------------
 // UHCI Types
 // ---------------------------------------------------------------------------------------------------------------
@@ -70,7 +75,7 @@ typedef struct UHCI_Transfer_Descriptor {
     UHCI_Transfer_Descriptor_Packet_Header packet_header;
     u32 buffer_address;
     u8  reserved[16];
-} PACKED_STRUCT UHCI_Transfer_Descriptor;
+} ALIGN_DECLARATION(16) UHCI_Transfer_Descriptor;
 
 typedef struct UHCI_Frame_List_Entry {
     u32 terminate : 1;
@@ -161,10 +166,10 @@ void clear_frame_list(UHCI_Controller *controller) {
 
 static
 b8 submit_queue(UHCI_Controller *controller, const volatile UHCI_Transfer_Descriptor *descriptor_table) {
-    const UHCI_Queue_Head queue_head = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = PHYSICAL_ADDRESS(descriptor_table) } };
+    const UHCI_Queue_Head queue_head = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(descriptor_table) } };
 
     // Make this queue live on the controller so that the descriptors should be executed
-    UHCI_Transfer_Descriptor_Link link_to_queue = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = PHYSICAL_ADDRESS(&queue_head) };
+    UHCI_Transfer_Descriptor_Link link_to_queue = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&queue_head) };
     for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
         controller->frame_list[i] = PHYSICAL_ADDRESS(&link_to_queue);
     }
@@ -172,7 +177,7 @@ b8 submit_queue(UHCI_Controller *controller, const volatile UHCI_Transfer_Descri
     // Wait until the controller has executed all descriptors in our queue
     b8 successful = true;
     while(successful && queue_head.vertical_pointer.terminate == false) {
-        const UHCI_Transfer_Descriptor *current_descriptor = VIRTUAL_ADDRESS(queue_head.vertical_pointer.pointer);
+        const UHCI_Transfer_Descriptor *current_descriptor = TRANSFER_DESCRIPTOR_POINTER(queue_head.vertical_pointer.pointer);
         if(current_descriptor->status.active == false && transfer_descriptor_has_error(current_descriptor)) {
             successful = false;
             break;
@@ -228,11 +233,11 @@ b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device, const u8 endpoi
     for(u32 descriptor_idx = 0; descriptor_idx < required_descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * TRANSFER_DESCRIPTOR_PAYLOAD_SIZE;
         const b8 is_last_descriptor = (descriptor_idx + 1 == required_descriptor_count);
-        const u32 next_descriptor_address = PHYSICAL_ADDRESS(&descriptor_list[descriptor_idx + 1]);
+        const u32 next_descriptor_address = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[descriptor_idx + 1]);
         const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = is_last_descriptor, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = next_descriptor_address };
         const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = min(size_in_bytes - offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE), .active = 1 };
         const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_Out, .device = device, .endpoint = endpoint, .data_toggle = controller->current_data_toggle, .maximum_length = TRANSFER_DESCRIPTOR_PAYLOAD_SIZE };
-        descriptor_list[descriptor_idx] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data + offset_in_bytes) };
+        descriptor_list[descriptor_idx] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS((const char *) data + offset_in_bytes) };
         controller->current_data_toggle = !controller->current_data_toggle;
     }
 
@@ -245,7 +250,7 @@ b8 uhci_control(UHCI_Controller *controller, void *header_data, const u32 header
 
     // SETUP Transfer Descriptor
     {
-        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = PHYSICAL_ADDRESS(&descriptor_list[1]) };
+        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[1]) };
         const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = header_size_in_bytes, .active = 1 };
         const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_Setup, .device = 0, .endpoint = 0, .data_toggle = controller->current_data_toggle, .maximum_length = header_size_in_bytes };
         descriptor_list[descriptor_idx++] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(header_data) };
@@ -256,11 +261,11 @@ b8 uhci_control(UHCI_Controller *controller, void *header_data, const u32 header
     const u32 required_payload_descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(payload_size_in_bytes);
     for(u32 payload_descriptor_idx = 0; payload_descriptor_idx < required_payload_descriptor_count; ++payload_descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * TRANSFER_DESCRIPTOR_PAYLOAD_SIZE;
-        const u32 next_descriptor_address = PHYSICAL_ADDRESS(&descriptor_list[descriptor_idx + 1]);
+        const u32 next_descriptor_address = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[descriptor_idx + 1]);
         const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = next_descriptor_address };
         const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = min(payload_size_in_bytes - offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE), .active = 1 };
         const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_In, .device = 0, .endpoint = 0, .data_toggle = controller->current_data_toggle, .maximum_length = TRANSFER_DESCRIPTOR_PAYLOAD_SIZE };
-        descriptor_list[descriptor_idx++] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(payload + offset_in_bytes) };
+        descriptor_list[descriptor_idx++] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS((const char *) payload + offset_in_bytes) };
         controller->current_data_toggle = !controller->current_data_toggle;
     }
 
@@ -285,11 +290,11 @@ b8 uhci_bulk_read(UHCI_Controller *controller, const u8 device, const u8 endpoin
     for(u32 descriptor_idx = 0; descriptor_idx < required_descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * TRANSFER_DESCRIPTOR_PAYLOAD_SIZE;
         const b8 is_last_descriptor = (descriptor_idx + 1 == required_descriptor_count);
-        const u32 next_descriptor_address = PHYSICAL_ADDRESS(&descriptor_list[descriptor_idx + 1]);
+        const u32 next_descriptor_address = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[descriptor_idx + 1]);
         const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = is_last_descriptor, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = next_descriptor_address };
         const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = min(size_in_bytes - offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE), .active = 1 };
         const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_In, .device = device, .endpoint = endpoint, .data_toggle = controller->current_data_toggle, .maximum_length = TRANSFER_DESCRIPTOR_PAYLOAD_SIZE };
-        descriptor_list[descriptor_idx] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data + offset_in_bytes) };
+        descriptor_list[descriptor_idx] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS((const char *) data + offset_in_bytes) };
         controller->current_data_toggle = !controller->current_data_toggle;
     }
 

@@ -9,8 +9,8 @@
 // The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
 // These helpers shall be used when interacting with hardware that does direct memory access - whereas the
 // kernel code might use virtual paging later
-#define PHYSICAL_ADDRESS(pointer) ((u32) pointer)
-#define VIRTUAL_ADDRESS(address)  ((void *) (u32) address)
+#define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
+#define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
 
 #define true 1
 #define false 0
