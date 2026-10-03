@@ -48,9 +48,7 @@ b8 uhci_initialize_device(const u32 io_base) {
     const u32 frame_number_register = io_base + 0x06;
     const u32 frame_list_base_address_register = io_base + 0x08;
     const u32 start_of_frame_modify = io_base + 0x0c;
-    const u32 port1 = io_base + 0x10;
-
-    const b8 first_check = check_port_connectivity(port1);
+    const u32 port1                 = io_base + 0x10;
 
     // Stop the UHCI
     port_write_u16(usb_command_register, 0x0);
@@ -76,6 +74,5 @@ b8 uhci_initialize_device(const u32 io_base) {
     // Start the controller
     port_write_u16(usb_command_register, 0xc1);
 
-    const b8 second_check = check_port_connectivity(port1);
-    return !first_check && second_check;
+    return check_port_connectivity(port1);
 }

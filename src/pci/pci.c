@@ -35,25 +35,30 @@ u32 calculate_address(const u8 bus, const u8 slot, const u8 function, const u8 o
 }
 
 static inline
-void take_device_ownership(const u8 bus, const u8 slot, const u8 function) {
-    pci_write_u16(bus, slot, function, 0xc0, 0x2000);
+u32 get_bar_address(const PCI_Device device, const u8 bar_offset) {
+    return pci_read_u32(device.bus, device.slot, device.function, bar_offset) & 0xfffffffc;
+}
+
+static inline
+void take_device_ownership(const PCI_Device device) {
+    pci_write_u16(device.bus, device.slot, device.function, 0xc0, 0x2000);
 }
 
 static
-b8 enable_bus_master(const u8 bus, const u8 slot, const u8 function) {
+b8 enable_bus_master(const PCI_Device device) {
     const u16 bus_master_mask = (1 << 2) | (1 << 0); // Enable bus master and IO decoding
-    const u16 current_configuration = pci_read_u16(bus, slot, function, UHCI_IOBAR_NUMBER);
+    const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER);
     if((current_configuration & bus_master_mask) == bus_master_mask) return true; // Already set up
     const u16 desired_configuration = current_configuration | bus_master_mask;
-    pci_write_u16(bus, slot, function, UHCI_IOBAR_NUMBER, desired_configuration);
-    return (pci_read_u16(bus, slot, function, UHCI_IOBAR_NUMBER) & bus_master_mask) == bus_master_mask;
+    pci_write_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER, desired_configuration);
+    return (pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER) & bus_master_mask) == bus_master_mask;
 }
 
 static
 void initialize_serial_bus_usb_controller_uhci(const PCI_Device device) {
-    take_device_ownership(device.bus, device.slot, device.function);
-    const b8 success = enable_bus_master(device.bus, device.slot, device.function) &&
-        uhci_initialize_device(pci_read_u32(device.bus, device.slot, device.function, UHCI_IOBAR_OFFSET));
+    take_device_ownership(device);
+    const b8 success = enable_bus_master(device) &&
+        uhci_initialize_device(get_bar_address(device, UHCI_IOBAR_OFFSET));
     if(success) {
         os_output_print(str8("Successfully initialized an UHCI device.\n"));
     } else {
@@ -102,7 +107,7 @@ void initialize_device(const PCI_Device device) {
 void pci_write_u16(const u8 bus, const u8 slot, const u8 function, const u8 offset, const u16 data) {
     const u32 address = calculate_address(bus, slot, function, offset);
     port_write_u32(PCI_ADDRESS, address);
-    port_write_u16(PCI_DATA, data);
+    port_write_u16(PCI_DATA + (offset & 0x2), data);
 }
 
 void pci_write_u32(const u8 bus, const u8 slot, const u8 function, const u8 offset, const u32 data) {
@@ -114,13 +119,13 @@ void pci_write_u32(const u8 bus, const u8 slot, const u8 function, const u8 offs
 u16 pci_read_u16(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
     const u32 address = calculate_address(bus, slot, function, offset);
     port_write_u32(PCI_ADDRESS, address);
-    return port_read_u16(PCI_DATA) >> ((offset & 0x2) * 8);
+    return port_read_u16(PCI_DATA + (offset & 0x2));
 }
 
 u32 pci_read_u32(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
     const u32 address = calculate_address(bus, slot, function, offset);
     port_write_u32(PCI_ADDRESS, address);
-    return port_read_u32(PCI_DATA) >> ((offset & 0x4) * 8);
+    return port_read_u32(PCI_DATA);
 }
 
 void pci_initialize(void) {
