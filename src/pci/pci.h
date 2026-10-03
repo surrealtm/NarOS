@@ -14,6 +14,8 @@ typedef struct PCI_Device {
     const u16 device_id;
 } PCI_Device;
 
-void pci_set_bar_address(u8 bus, u8 slot, u8 function, u8 bar_number, u32 data);
-u32 pci_get_bar_address(u8 bus, u8 slot, u8 bar_number, u8 function);
+void pci_write_u16(u8 bus, u8 slot, u8 function, u8 offset, u16 data);
+void pci_write_u32(u8 bus, u8 slot, u8 function, u8 offset, u32 data);
+u16 pci_read_u16(u8 bus, u8 slot, u8 function, u8 offset);
+u32 pci_read_u32(u8 bus, u8 slot, u8 function, u8 offset);
 void pci_initialize(void);
