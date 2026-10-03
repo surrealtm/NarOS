@@ -12,6 +12,34 @@
 #define UHCI_IOBAR_NUMBER 0x4
 #define UHCI_IOBAR_OFFSET 0x20
 
+// ---------------------------------------------------------------------------------------------------------------
+// Connected Devices
+// ---------------------------------------------------------------------------------------------------------------
+
+#define MAX_UHCI_CONTROLLERS 1
+
+typedef struct Connected_Devices {
+    UHCI_Controller uhci[MAX_UHCI_CONTROLLERS];
+    u32 uhci_count;
+} Connected_Devices;
+
+static Connected_Devices connected_devices = { 0 };
+
+static
+UHCI_Controller *allocate_uhci_controller(void) {
+    if(connected_devices.uhci_count == MAX_UHCI_CONTROLLERS) {
+        return null;
+    }
+
+    UHCI_Controller *pointer = &connected_devices.uhci[connected_devices.uhci_count++];
+    set_memory(pointer, 0, sizeof(UHCI_Controller));
+    return pointer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// PCI Types
+// ---------------------------------------------------------------------------------------------------------------
+
 typedef enum Class_Code {
     CLASS_Mass_Storage_Device = 0x1,
     CLASS_Serial_Bus_Controller = 0xc,
@@ -28,6 +56,10 @@ typedef enum Serial_Bus_Controller_Subclass {
 typedef enum Serial_Bus_USB_Controller_Program_Interface {
     SERIAL_BUS_USB_CONTROLLER_UHCI = 0x0,
 } Serial_Bus_USB_Controller_Program_Interface;
+
+// ---------------------------------------------------------------------------------------------------------------
+// PCI Interaction
+// ---------------------------------------------------------------------------------------------------------------
 
 static inline
 u32 calculate_address(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
@@ -54,17 +86,9 @@ b8 enable_bus_master(const PCI_Device device) {
     return (pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER) & bus_master_mask) == bus_master_mask;
 }
 
-static
-void initialize_serial_bus_usb_controller_uhci(const PCI_Device device) {
-    take_device_ownership(device);
-    const b8 success = enable_bus_master(device) &&
-        uhci_initialize_device(get_bar_address(device, UHCI_IOBAR_OFFSET));
-    if(success) {
-        os_output_print(str8("Successfully initialized an UHCI device.\n"));
-    } else {
-        os_output_print(str8("Failed to initialize an UHCI device.\n"));
-    }
-}
+// ---------------------------------------------------------------------------------------------------------------
+// Device Initialization
+// ---------------------------------------------------------------------------------------------------------------
 
 static
 void initialize_mass_storage_device(const PCI_Device device) {
@@ -77,9 +101,18 @@ void initialize_mass_storage_device(const PCI_Device device) {
 static
 void initialize_serial_bus_usb_controller(const PCI_Device device) {
     switch(device.interface) {
-        case SERIAL_BUS_USB_CONTROLLER_UHCI:
-            initialize_serial_bus_usb_controller_uhci(device);
-            break;
+        case SERIAL_BUS_USB_CONTROLLER_UHCI: {
+            UHCI_Controller *controller = allocate_uhci_controller();
+            if(controller) {
+                take_device_ownership(device);
+                const b8 success = enable_bus_master(device) && uhci_initialize_controller(controller, get_bar_address(device, UHCI_IOBAR_OFFSET));
+                if(success) {
+                    os_output_print(str8("Successfully initialized an UHCI device.\n"));
+                } else {
+                    os_output_print(str8("Failed to initialize an UHCI device.\n"));
+                }
+            }
+        } break;
     }
 }
 
@@ -103,6 +136,10 @@ void initialize_device(const PCI_Device device) {
             break;
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------
 
 void pci_write_u16(const u8 bus, const u8 slot, const u8 function, const u8 offset, const u16 data) {
     const u32 address = calculate_address(bus, slot, function, offset);
