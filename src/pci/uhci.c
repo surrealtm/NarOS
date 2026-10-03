@@ -1,21 +1,22 @@
 #include "uhci.h"
+#include "base.h"
 #include "ctrl.h"
 #include "port/port.h"
 
 #define FRAME_LIST_CAPACITY 1024
 
-static volatile const u32 frame_list[FRAME_LIST_CAPACITY] = { 1 };
+static volatile u32 frame_list[FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
 
 static
-void wait_for_present_flag(const u32 usb_command_register, const u32 flag) {
-    while(!(port_read_u16(usb_command_register) & flag)) {
+void wait_for_present_flag(const u32 source_register, const u32 flag) {
+    while(!(port_read_u16(source_register) & flag)) {
         os_ctrl_sleep(1000000);
     }
 }
 
 static
-void wait_for_missing_flag(const u32 usb_command_register, const u32 flag) {
-    while(port_read_u16(usb_command_register) & flag) {
+void wait_for_missing_flag(const u32 source_register, const u32 flag) {
+    while(port_read_u16(source_register) & flag) {
         os_ctrl_sleep(1000000);
     }
 }
@@ -26,6 +27,11 @@ b8 check_port_connectivity(const u32 port) {
 }
 
 b8 uhci_initialize_device(const u32 io_base) {
+    // Initialize the frame list to only consist of "terminate" commands
+    for(u32 i = 0; i < ARRAY_COUNT(frame_list); ++i) {
+        frame_list[i] = 1;
+    }
+
     const u32 usb_command_register  = io_base + 0x00;
     const u32 usb_status_register   = io_base + 0x02;
     const u32 usb_interrupt_enable  = io_base + 0x04;
@@ -42,7 +48,7 @@ b8 uhci_initialize_device(const u32 io_base) {
 
     // Reset the controller
     port_write_u16(usb_command_register, 1 << 1);
-    wait_for_missing_flag(usb_status_register, 1 << 1);
+    wait_for_missing_flag(usb_command_register, 1 << 1);
 
     // Clear the controller status
     port_write_u16(usb_status_register, 0x1f);

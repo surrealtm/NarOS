@@ -4,6 +4,7 @@
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 #define PACKED_STRUCT __attribute__((packed))
+#define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
 
 #define true 1
 #define false 0

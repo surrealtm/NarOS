@@ -45,7 +45,7 @@ static
 u32 read_configuration_word(const u8 bus, const u8 slot, const u8 function, const u8 offset) {
     const u32 address = calculate_address(bus, slot, function, offset);
     port_write_u32(PCI_ADDRESS, address);
-    return port_read_u32(PCI_DATA) >> ((offset & 0x2) * 8) & 0xffff;
+    return port_read_u32(PCI_DATA) >> ((offset & 0x2) * 8);
 }
 
 void pci_set_bar_address(const u8 bus, const u8 slot, const u8 function, const u8 bar_number, const u32 value) {
@@ -53,17 +53,7 @@ void pci_set_bar_address(const u8 bus, const u8 slot, const u8 function, const u
 }
 
 u32 pci_get_bar_address(const u8 bus, const u8 slot, const u8 function, const u8 bar_number) {
-    return read_configuration_word(bus, slot, function, bar_number);
-}
-
-static inline
-u32 get_io_configuration(const u8 bus, const u8 slot, const u8 function) {
-    return pci_get_bar_address(bus, slot, function, UHCI_IOBAR_NUMBER) & 0xfffc;
-}
-
-static inline
-void set_io_configuration(const u8 bus, const u8 slot, const u8 function, const u32 configuration) {
-    pci_set_bar_address(bus, slot, function, UHCI_IOBAR_NUMBER, configuration);
+    return read_configuration_word(bus, slot, function, bar_number) & 0xfffffffc;
 }
 
 static inline
@@ -72,19 +62,19 @@ void take_device_ownership(const u8 bus, const u8 slot, const u8 function) {
 }
 
 static
-b8 maybe_enable_bus_mastering(const u8 bus, const u8 slot, const u8 function) {
-    const u32 bus_mastering_mask = 0x04;
-    const u32 current_configuration = get_io_configuration(bus, slot, function);
-    if((current_configuration & bus_mastering_mask) != 0) return true; // Already set up
-    const u32 desired_configuration = current_configuration | bus_mastering_mask;
-    set_io_configuration(bus, slot, function, desired_configuration);
-    return (get_io_configuration(bus, slot, function) & bus_mastering_mask) != 0;
+b8 enable_bus_master(const u8 bus, const u8 slot, const u8 function) {
+    const u32 bus_master_mask = (1 << 2) | (1 << 0); // Enable bus master and IO decoding
+    const u32 current_configuration = read_configuration_word(bus, slot, function, UHCI_IOBAR_NUMBER);
+    if((current_configuration & bus_master_mask) == bus_master_mask) return true; // Already set up
+    const u32 desired_configuration = current_configuration | bus_master_mask;
+    write_configuration_word(bus, slot, function, UHCI_IOBAR_NUMBER, desired_configuration);
+    return (read_configuration_word(bus, slot, function, UHCI_IOBAR_NUMBER) & bus_master_mask) == bus_master_mask;
 }
 
 static
 void initialize_serial_bus_usb_controller_uhci(const PCI_Device device) {
     take_device_ownership(device.bus, device.slot, device.function);
-    maybe_enable_bus_mastering(device.bus, device.slot, device.function);
+    enable_bus_master(device.bus, device.slot, device.function);
     uhci_initialize_device(pci_get_bar_address(device.bus, device.slot, device.function, UHCI_IOBAR_OFFSET));
 }
 
