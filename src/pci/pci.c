@@ -52,8 +52,13 @@ b8 enable_bus_master(const u8 bus, const u8 slot, const u8 function) {
 static
 void initialize_serial_bus_usb_controller_uhci(const PCI_Device device) {
     take_device_ownership(device.bus, device.slot, device.function);
-    enable_bus_master(device.bus, device.slot, device.function);
-    uhci_initialize_device(pci_read_u32(device.bus, device.slot, device.function, UHCI_IOBAR_OFFSET));
+    const b8 success = enable_bus_master(device.bus, device.slot, device.function) &&
+        uhci_initialize_device(pci_read_u32(device.bus, device.slot, device.function, UHCI_IOBAR_OFFSET));
+    if(success) {
+        os_output_print(str8("Successfully initialized an UHCI device.\n"));
+    } else {
+        os_output_print(str8("Failed to initialize an UHCI device.\n"));
+    }
 }
 
 static

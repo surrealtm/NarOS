@@ -4,21 +4,31 @@
 #include "port/port.h"
 
 #define FRAME_LIST_CAPACITY 1024
+#define WAIT_INTERVAL_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
+#define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
 static volatile u32 frame_list[FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
 
 static
-void wait_for_present_flag(const u32 source_register, const u32 flag) {
-    while(!(port_read_u16(source_register) & flag)) {
+b8 wait_for_present_flag(const u32 source_register, const u32 flag) {
+    for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
+        if((port_read_u16(source_register) & flag) != 0) {
+            return true;
+        }
         os_ctrl_sleep(1000000);
     }
+    return false;
 }
 
 static
-void wait_for_missing_flag(const u32 source_register, const u32 flag) {
-    while(port_read_u16(source_register) & flag) {
+b8 wait_for_missing_flag(const u32 source_register, const u32 flag) {
+    for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
+        if((port_read_u16(source_register) & flag) == 0) {
+            return true;
+        }
         os_ctrl_sleep(1000000);
     }
+    return false;
 }
 
 static inline
@@ -44,11 +54,15 @@ b8 uhci_initialize_device(const u32 io_base) {
 
     // Stop the UHCI
     port_write_u16(usb_command_register, 0x0);
-    wait_for_present_flag(usb_status_register, 1 << 5);
+    if(!wait_for_present_flag(usb_status_register, 1 << 5)) {
+        return false;
+    }
 
     // Reset the controller
     port_write_u16(usb_command_register, 1 << 1);
-    wait_for_missing_flag(usb_command_register, 1 << 1);
+    if(!wait_for_missing_flag(usb_command_register, 1 << 1)) {
+        return false;
+    }
 
     // Clear the controller status
     port_write_u16(usb_status_register, 0x1f);
