@@ -22,7 +22,7 @@ typedef struct UHCI_Port {
 typedef struct UHCI_Controller {
     u32 frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
     u32 pci_address;
-    u8 queue_head[16]; // Of type UHCI_Queue_Head, but I don't want to declare all of these structures publicly. Stored on the Controller itself as the hardware might access it asynchronously
+    u8 queue_head[16] ALIGN_DECLARATION(16); // Of type UHCI_Queue_Head, but I don't want to declare all of these structures publicly. Stored on the Controller itself as the hardware might access it asynchronously
     UHCI_Port ports[UHCI_PORT_CAPACITY];
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 } UHCI_Controller;

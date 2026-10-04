@@ -7,7 +7,7 @@
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 #define TRANSFER_DESCRIPTOR_PAYLOAD_SIZE 32 // @Cleanup: Get rid of this... This cannot be assumed constant but shall be read from the device descriptor
 #define TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(size_in_bytes) ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
-#define REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes / (TRANSFER_DESCRIPTOR_PAYLOAD_SIZE) + 1) : 0)
+#define REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes) ((size_in_bytes) > 0  ? (((size_in_bytes) + TRANSFER_DESCRIPTION_PAYLOAD_SIZE - 1) / TRANSFER_DESCRIPTOR_PAYLOAD_SIZE) : 0)
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
@@ -208,11 +208,12 @@ void prepare_transfer_descriptor_list(UHCI_Controller *controller, UHCI_Transfer
 
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * TRANSFER_DESCRIPTOR_PAYLOAD_SIZE;
+        const u32 descriptor_payload_size_in_bytes = min(size_in_bytes - offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE);
         const b8 is_last_descriptor = (descriptor_idx + 1 == descriptor_count);
         const u32 next_descriptor_address = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[descriptor_idx + 1]);
         const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = is_last_descriptor, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = next_descriptor_address };
-        const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = min(size_in_bytes - offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE), .active = 1 };
-        const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, packet_type), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(TRANSFER_DESCRIPTOR_PAYLOAD_SIZE) };
+        const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = descriptor_payload_size_in_bytes, .active = 1 };
+        const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, packet_type), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(descriptor_payload_size_in_bytes) };
         descriptor_list[descriptor_idx] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS((const char *) data + offset_in_bytes) };
     }
 }
@@ -252,9 +253,10 @@ b8 submit_queue(UHCI_Controller *controller, UHCI_Endpoint *endpoint, const vola
     }
 
     //
-    // Reset the frame list to stop executing any transfers
+    // Reset the frame list so that the controller does not attempt to re-execute these descriptors again.
     //
     clear_frame_list(controller);
+
     return successful;
 }
 
@@ -296,6 +298,7 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
 }
 
 b8 uhci_control(UHCI_Controller *controller, const u8 device_idx, void *header_data, const u32 header_size_in_bytes, void *payload, const u32 payload_size_in_bytes) {
+    const u8 data_size_in_bytes = 8;
     const u8 endpoint_idx = 0;
 
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
@@ -321,7 +324,7 @@ b8 uhci_control(UHCI_Controller *controller, const u8 device_idx, void *header_d
         const u32 next_descriptor_address = TRANSFER_DESCRIPTOR_ADDRESS(&descriptor_list[descriptor_idx + 1]);
         const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = next_descriptor_address };
         const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = min(payload_size_in_bytes - payload_offset_in_bytes, TRANSFER_DESCRIPTOR_PAYLOAD_SIZE), .active = 1 };
-        const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_In, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, UHCI_PACKET_In), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(TRANSFER_DESCRIPTOR_PAYLOAD_SIZE) };
+        const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = UHCI_PACKET_In, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, UHCI_PACKET_In), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(data_size_in_bytes) };
         descriptor_list[descriptor_idx++] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS((const char *) payload + payload_offset_in_bytes) };
     }
 
@@ -339,7 +342,7 @@ b8 uhci_control(UHCI_Controller *controller, const u8 device_idx, void *header_d
 b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const void *data, u32 size_in_bytes) {
     const u32 required_descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes);
     UHCI_Transfer_Descriptor descriptor_list[REQUIRED_TRANSFER_DESCRIPTORS(512)];
-    assert(required_descriptor_count < ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk read was reached.");
+    assert(required_descriptor_count <= ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk read was reached.");
 
     prepare_transfer_descriptor_list(controller, descriptor_list, required_descriptor_count, device_idx, endpoint_idx, UHCI_PACKET_Out, data, size_in_bytes);
     return submit_queue(controller, find_endpoint(controller, device_idx, endpoint_idx), descriptor_list);
@@ -348,7 +351,7 @@ b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 en
 b8 uhci_bulk_read(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, void *data, const u32 size_in_bytes) {
     const u32 required_descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(size_in_bytes);
     UHCI_Transfer_Descriptor descriptor_list[REQUIRED_TRANSFER_DESCRIPTORS(512)];
-    assert(required_descriptor_count < ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk read was reached.");
+    assert(required_descriptor_count <= ARRAY_COUNT(descriptor_list), "The maximum capacity of a UHCI bulk read was reached.");
 
     prepare_transfer_descriptor_list(controller, descriptor_list, required_descriptor_count, device_idx, endpoint_idx, UHCI_PACKET_In, data, size_in_bytes);
     return submit_queue(controller, find_endpoint(controller, device_idx, endpoint_idx), descriptor_list);
