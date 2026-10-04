@@ -6,8 +6,8 @@
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
-#define TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(size_in_bytes) ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
-#define REQUIRED_TRANSFER_DESCRIPTORS(endpoint, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes / (endpoint->maximum_length - 1) + 1) : 0)
+#define TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
+#define REQUIRED_TRANSFER_DESCRIPTORS(endpoint, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + endpoint->maximum_length - 1) / endpoint->maximum_length : 0)
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
@@ -55,6 +55,11 @@ void write_frame_list_pointer(const UHCI_Controller *controller, const u32 *fram
 static inline
 void write_frame_number(const UHCI_Controller *controller, const u16 frame_number) {
     port_write_u16(controller->pci_address + 0x06, frame_number);
+}
+
+static inline
+u16 read_frame_number(const UHCI_Controller *controller) {
+    return port_read_u16(controller->pci_address + 0x06);
 }
 
 static inline
@@ -145,8 +150,10 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
         controller->transfer_descriptors[controller->active_transfer_descriptors - 1].link = link;
     }
 
+    const u32 error_retry_counter = 3;
+
     const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = true };
-    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = length, .active = 1 };
+    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = length, .error_retry_counter = error_retry_counter, .active = 1 };
     const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, packet_type), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(length) };
     controller->transfer_descriptors[controller->active_transfer_descriptors] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data) };
 
@@ -176,6 +183,8 @@ b8 submit_queue(UHCI_Controller *controller, const u8 device_idx, const u8 endpo
     //
     // Make this queue live on the controller so that the descriptors should be executed
     //
+    memory_barrier();
+
     UHCI_Transfer_Descriptor_Link link_to_queue = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->queue_head) };
     for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
         STATIC_ASSERT(sizeof(link_to_queue) == sizeof(u32));
@@ -200,8 +209,15 @@ b8 submit_queue(UHCI_Controller *controller, const u8 device_idx, const u8 endpo
 
     //
     // Reset the frame list so that the controller does not attempt to re-execute these descriptors again.
+    // Wait until the controller has moved onto a new frame number (to which we've already written the dummy
+    // terminate frame), to make sure that it is not still trying to read from our current queue
     //
     clear_frame_list(controller);
+    memory_barrier();
+    const u16 current_frame_number = read_frame_number(controller);
+    while(read_frame_number(controller) == current_frame_number) {
+        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+    }
     controller->active_transfer_descriptors = 0;
     return successful;
 }

@@ -49,6 +49,10 @@ b8 str8_equals(const Str8 lhs, const Str8 rhs) {
     return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count) == 0;
 }
 
+void memory_barrier(void) {
+    __asm__ volatile("" ::: "memory");
+}
+
 void panic(const Str8 reason) {
     render_panic_text(reason);
     for (;;) {

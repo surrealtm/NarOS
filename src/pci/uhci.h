@@ -50,7 +50,7 @@ typedef struct UHCI_Transfer_Descriptor_Status {
     u32 interrupt_on_complete : 1;
     u32 is_isochronous : 1;
     u32 low_speed : 1;
-    u32 error_counter : 2;
+    u32 error_retry_counter : 2;
     u32 short_packet_detect : 1;
     u32 reserved1 : 2;
 } UHCI_Transfer_Descriptor_Status;

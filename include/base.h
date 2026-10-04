@@ -60,6 +60,7 @@ typedef struct Str8 {
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
+void memory_barrier(void);
 void panic(Str8 reason);
 
 void set_memory(void *dst, u8 value, u32 size_in_bytes);
