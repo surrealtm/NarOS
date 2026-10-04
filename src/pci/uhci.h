@@ -34,12 +34,13 @@ typedef enum UHCI_Port_Status {
     UHCI_PORT_STATUS_Connection_Changed  = 1 << 1,
     UHCI_PORT_STATUS_Currently_Enabled   = 1 << 2,
     UHCI_PORT_STATUS_Enabled_Changed     = 1 << 3,
-    UHCI_PORT_STATUS_Line                = 1 << 4,
-    UHCI_PORT_STATUS_Resume_Detected     = 1 << 7,
+    UHCI_PORT_STATUS_Line                = 3 << 4,
+    UHCI_PORT_STATUS_Resume_Detected     = 1 << 6,
     UHCI_PORT_STATUS_Low_Speed           = 1 << 8,
     UHCI_PORT_STATUS_Reset               = 1 << 9,
-    UHCI_PORT_STATUS_Overcurrent_Change  = 1 << 11,
     UHCI_PORT_STATUS_Suspended           = 1 << 12,
+
+    UHCI_PORT_STATUS_STATUS_FLAGS = (UHCI_PORT_STATUS_Connection_Changed | UHCI_PORT_STATUS_Enabled_Changed),
 } UHCI_Port_Status;
 
 typedef struct UHCI_Transfer_Descriptor_Link {
@@ -51,7 +52,7 @@ typedef struct UHCI_Transfer_Descriptor_Link {
 } UHCI_Transfer_Descriptor_Link;
 
 typedef struct UHCI_Transfer_Descriptor_Status {
-    u32 length : 11;
+    u32 transferred_length : 11;
     u32 reserved0 : 6;
     u32 bit_error : 1;
     u32 timeout_crc : 1;
@@ -74,7 +75,7 @@ typedef struct UHCI_Transfer_Descriptor_Packet_Header {
     u32 endpoint : 4;
     u32 data_toggle : 1;
     u32 reserved : 1;
-    u32 maximum_length : 11;
+    u32 requested_length : 11;
 } UHCI_Transfer_Descriptor_Packet_Header;
 
 typedef struct UHCI_Transfer_Descriptor {
@@ -104,7 +105,7 @@ typedef struct UHCI_Queue_Head {
 
 typedef struct UHCI_Endpoint {
     u8 next_data_toggle[2]; // Track this separately for each direction
-    u32 maximum_length;
+    u16 maximum_packet_size[2];
 } UHCI_Endpoint;
 
 typedef struct UHCI_Device {
@@ -127,7 +128,29 @@ typedef struct UHCI_Controller {
 } UHCI_Controller;
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address);
-b8 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
-b8 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
-b8 uhci_bulk_write(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, const void *data, u32 size_in_bytes);
-b8 uhci_bulk_read(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, void *data, u32 size_in_bytes);
+
+/**
+ * Issues a read control transaction to the controller for the specified device id.
+ * The header data is expected to be exactly 8 bytes long, the payload size is variable.
+ * Returns the number of bytes read, or -1 on error.
+ */
+s32 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
+
+/**
+ * Issues a write control transaction on the controller for the specified device id.
+ * The header data is expected to be exactly 8 bytes long, the payload size is variable.
+ * Returns the number of bytes read, or -1 on error.
+ */
+s32 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
+
+/**
+ * Writes a bulk of data to the controller.
+ * Returns the number of bytes written, or -1 on error.
+ */
+s32 uhci_bulk_write(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, const void *data, u32 size_in_bytes);
+
+/**
+ * Reads a bulk of data from the controller.
+ * Returns the number of bytes read, or -1 on error.
+ */
+s32 uhci_bulk_read(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, void *data, u32 size_in_bytes);

@@ -6,8 +6,8 @@
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
-#define TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
-#define REQUIRED_TRANSFER_DESCRIPTORS(endpoint, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + endpoint->maximum_length - 1) / endpoint->maximum_length : 0)
+#define TRANSFER_DESCRIPTOR_ENCODED_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
+#define REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + maximum_packet_size - 1) / maximum_packet_size : 0)
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
@@ -100,29 +100,34 @@ static
 b8 enable_port(const UHCI_Controller *controller, const u32 port_idx) {
     {
         // Assert the `RESET` status for 50 milliseconds for the port to read it.
-        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) | UHCI_PORT_STATUS_Reset;
-        write_port_status(controller, port_idx, desired_status);
+        write_port_status(controller, port_idx, UHCI_PORT_STATUS_Reset);
         os_ctrl_sleep(NANOSECONDS_FROM_MILLISECONDS(50));
     }
 
     {
         // Deassert the `RESET` status
-        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) & ~UHCI_PORT_STATUS_Reset;
+        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) & ~(UHCI_PORT_STATUS_Reset | UHCI_PORT_STATUS_STATUS_FLAGS);
         write_port_status(controller, port_idx, desired_status);
         os_ctrl_sleep(NANOSECONDS_FROM_MILLISECONDS(10));
     }
 
     {
         // Enable the port and reset all status bits
-        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) & ~(UHCI_PORT_STATUS_Suspended | UHCI_PORT_STATUS_Connection_Changed | UHCI_PORT_STATUS_Enabled_Changed);
+        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) | UHCI_PORT_STATUS_Connection_Changed | UHCI_PORT_STATUS_Enabled_Changed;
         write_port_status(controller, port_idx, desired_status);
         write_port_status(controller, port_idx, desired_status | UHCI_PORT_STATUS_Currently_Enabled);
     }
 
     {
-        // Ensure a valid startup for this port
-        const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-        return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !(current_status & UHCI_PORT_STATUS_Suspended);
+        // Wait for a valid startup for this port
+        for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
+            const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
+            if(!!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended)) {
+                return true;
+            }
+            os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+        }
+        return false;
     }
 }
 
@@ -149,9 +154,9 @@ void set_data_toggle(UHCI_Endpoint *endpoint, const UHCI_Packet_Type packet_type
 }
 
 static
-void reset_data_toggles(UHCI_Endpoint *endpoint) {
+void reset_data_toggles(UHCI_Endpoint *endpoint, const u8 desired_toggle) {
     for(u32 i = 0; i < ARRAY_COUNT(endpoint->next_data_toggle); ++i) {
-        endpoint->next_data_toggle[i] = 1;
+        endpoint->next_data_toggle[i] = desired_toggle;
     }
 }
 
@@ -160,6 +165,15 @@ u8 get_and_advance_data_toggle(UHCI_Endpoint *endpoint, const UHCI_Packet_Type p
     const u8 data_toggle = get_data_toggle(endpoint, packet_type);
     set_data_toggle(endpoint, packet_type, !data_toggle);
     return data_toggle;
+}
+
+static
+u16 get_maximum_packet_size(const UHCI_Endpoint *endpoint, const UHCI_Packet_Type packet_type) {
+    switch(packet_type) {
+        case UHCI_PACKET_In: return endpoint->maximum_packet_size[0];
+        case UHCI_PACKET_Out: return endpoint->maximum_packet_size[1];
+        default: return 8;
+    }
 }
 
 static
@@ -192,8 +206,8 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
     const u32 error_retry_counter = 3;
 
     const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = true };
-    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .length = length, .error_retry_counter = error_retry_counter, .active = 1 };
-    const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, packet_type), .maximum_length = TRANSFER_DESCRIPTOR_MAXIMUM_LENGTH(length) };
+    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .transferred_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(0), .error_retry_counter = error_retry_counter, .active = 1, .short_packet_detect = 1 };
+    const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, packet_type), .requested_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(length) };
     controller->transfer_descriptors[controller->active_transfer_descriptors] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data) };
 
     ++controller->active_transfer_descriptors;
@@ -202,10 +216,11 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
 static
 void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Packet_Type packet_type, const u32 size_in_bytes, const void *data) {
     const UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
-    const u32 descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(endpoint, size_in_bytes);
+    const u16 maximum_packet_size = get_maximum_packet_size(endpoint, packet_type);
+    const u32 descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes);
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
-        const u32 offset_in_bytes = descriptor_idx * endpoint->maximum_length;
-        const u32 packet_size_in_bytes = min(size_in_bytes - offset_in_bytes, endpoint->maximum_length);
+        const u32 offset_in_bytes = descriptor_idx * maximum_packet_size;
+        const u32 packet_size_in_bytes = min(size_in_bytes - offset_in_bytes, maximum_packet_size);
         add_single_transfer_descriptor(controller, device_idx, endpoint_idx, packet_type, packet_size_in_bytes, (const char *) data + offset_in_bytes);
     }
 }
@@ -257,18 +272,24 @@ b8 submit_queue(UHCI_Controller *controller, const u8 device_idx, const u8 endpo
     while(read_frame_number(controller) == current_frame_number) {
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
     }
+
+    s32 number_of_bytes_transferred = 0;
+    for(u32 i = 0; i < controller->active_transfer_descriptors; ++i) {
+        number_of_bytes_transferred += controller->transfer_descriptors[i].status.transferred_length;
+    }
+
     controller->active_transfer_descriptors = 0;
-    return successful;
+    return successful ? number_of_bytes_transferred : -1;
 }
 
 static
 b8 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_Type payload_direction, const void *header_data, const u32 header_size_in_bytes, const void *payload, const u32 payload_size_in_bytes) {
+    assert(header_size_in_bytes == 8, "The header size for a control transaction was expected to be 8 bytes long.");
+
     const u8 endpoint_idx = 0;
 
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
-    reset_data_toggles(endpoint); // A setup transfer descriptor resets all data toggles for this endpoint
-
-    // @Cleanup: The maximum length for the data tds here is supposed to be 8 apparently
+    reset_data_toggles(endpoint, 1); // A setup transfer descriptor resets all data toggles for this endpoint
 
     // Setup transfer
     {
@@ -299,8 +320,11 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     controller->pci_address = pci_address;
     for(u32 device_idx = 0; device_idx < UHCI_DEVICE_CAPACITY; ++device_idx) {
         for(u32 endpoint_idx = 0; endpoint_idx < UHCI_ENDPOINT_CAPACITY; ++endpoint_idx) {
-            controller->devices[device_idx].endpoints[endpoint_idx].maximum_length = 8; // This is really only the default for the 0th endpoint, all other endpoints need to be configured before they may be used
-            reset_data_toggles(&controller->devices[device_idx].endpoints[endpoint_idx]);
+            // This is really only the default for the 0th endpoint, all other endpoints need to be configured before they may
+            // be used
+            controller->devices[device_idx].endpoints[endpoint_idx].maximum_packet_size[0] = 8;
+            controller->devices[device_idx].endpoints[endpoint_idx].maximum_packet_size[1] = 8;
+            reset_data_toggles(&controller->devices[device_idx].endpoints[endpoint_idx], 0);
         }
     }
     for(u32 i = 0; i < UHCI_PORT_CAPACITY; ++i) {
@@ -327,26 +351,28 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     issue_command(controller, UHCI_COMMAND_Start);
 
     for(u32 i = 0; i < UHCI_PORT_CAPACITY; ++i) {
-        controller->ports[i].connected = enable_port(controller, 0);
+        controller->ports[i].connected = enable_port(controller, i);
     }
 
     return true;
 }
 
-b8 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes) {
+s32 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes) {
     return control(controller, device_idx, UHCI_PACKET_In, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
-b8 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes) {
+s32 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes) {
     return control(controller, device_idx, UHCI_PACKET_Out, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
-b8 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const void *data, u32 size_in_bytes) {
+s32 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const void *data, u32 size_in_bytes) {
+    if(size_in_bytes == 0) return true;
     add_transfer_descriptors(controller, device_idx, endpoint_idx, UHCI_PACKET_Out, size_in_bytes, data);
     return submit_queue(controller, device_idx, endpoint_idx);
 }
 
-b8 uhci_bulk_read(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, void *data, const u32 size_in_bytes) {
+s32 uhci_bulk_read(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, void *data, const u32 size_in_bytes) {
+    if(size_in_bytes == 0) return true;
     add_transfer_descriptors(controller, device_idx, endpoint_idx, UHCI_PACKET_In, size_in_bytes, data);
     return submit_queue(controller, device_idx, endpoint_idx);
 }
