@@ -29,6 +29,19 @@ typedef enum UHCI_Memory_Structure_Type {
     UHCI_MEMORY_STRUCTURE_Queue_Head          = 0x1,
 } UHCI_Memory_Structure_Type;
 
+typedef enum UHCI_Port_Status {
+    UHCI_PORT_STATUS_Currently_Connected = 1 << 0,
+    UHCI_PORT_STATUS_Connection_Changed  = 1 << 1,
+    UHCI_PORT_STATUS_Currently_Enabled   = 1 << 2,
+    UHCI_PORT_STATUS_Enabled_Changed     = 1 << 3,
+    UHCI_PORT_STATUS_Line                = 1 << 4,
+    UHCI_PORT_STATUS_Resume_Detected     = 1 << 7,
+    UHCI_PORT_STATUS_Low_Speed           = 1 << 8,
+    UHCI_PORT_STATUS_Reset               = 1 << 9,
+    UHCI_PORT_STATUS_Overcurrent_Change  = 1 << 11,
+    UHCI_PORT_STATUS_Suspended           = 1 << 12,
+} UHCI_Port_Status;
+
 typedef struct UHCI_Transfer_Descriptor_Link {
     u32 terminate : 1;
     UHCI_Memory_Structure_Type memory_structure_type : 1;
@@ -100,6 +113,7 @@ typedef struct UHCI_Device {
 
 typedef struct UHCI_Port {
     u32 register_address;
+    b8 connected;
 } UHCI_Port;
 
 typedef struct UHCI_Controller {

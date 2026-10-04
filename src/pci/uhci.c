@@ -83,8 +83,47 @@ void issue_command(const UHCI_Controller *controller, const u16 command) {
 }
 
 static inline
-b8 check_port_connectivity(const UHCI_Controller *controller, const u32 port_idx) {
-    return port_read_u16(controller->ports[port_idx].register_address) & 0x1;
+void write_port_status(const UHCI_Controller *controller, const u32 port_idx, const UHCI_Port_Status status) {
+    port_write_u16(controller->ports[port_idx].register_address, status);
+}
+
+static inline
+UHCI_Port_Status read_port_status(const UHCI_Controller *controller, const u32 port_idx) {
+    return (UHCI_Port_Status) port_read_u16(controller->ports[port_idx].register_address);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Port Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+b8 enable_port(const UHCI_Controller *controller, const u32 port_idx) {
+    {
+        // Assert the `RESET` status for 50 milliseconds for the port to read it.
+        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) | UHCI_PORT_STATUS_Reset;
+        write_port_status(controller, port_idx, desired_status);
+        os_ctrl_sleep(NANOSECONDS_FROM_MILLISECONDS(50));
+    }
+
+    {
+        // Deassert the `RESET` status
+        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) & ~UHCI_PORT_STATUS_Reset;
+        write_port_status(controller, port_idx, desired_status);
+        os_ctrl_sleep(NANOSECONDS_FROM_MILLISECONDS(10));
+    }
+
+    {
+        // Enable the port and reset all status bits
+        const UHCI_Port_Status desired_status = read_port_status(controller, port_idx) & ~(UHCI_PORT_STATUS_Suspended | UHCI_PORT_STATUS_Connection_Changed | UHCI_PORT_STATUS_Enabled_Changed);
+        write_port_status(controller, port_idx, desired_status);
+        write_port_status(controller, port_idx, desired_status | UHCI_PORT_STATUS_Currently_Enabled);
+    }
+
+    {
+        // Ensure a valid startup for this port
+        const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
+        return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !(current_status & UHCI_PORT_STATUS_Suspended);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -265,7 +304,7 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
         }
     }
     for(u32 i = 0; i < UHCI_PORT_CAPACITY; ++i) {
-        controller->ports[i] = (UHCI_Port) { .register_address = controller->pci_address + 0x10 + (i * 2) };
+        controller->ports[i] = (UHCI_Port) { .register_address = controller->pci_address + 0x10 + (i * 2), .connected = false };
     }
 
     clear_frame_list(controller);
@@ -287,7 +326,11 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     write_frame_timing(controller, 0x40);
     issue_command(controller, UHCI_COMMAND_Start);
 
-    return check_port_connectivity(controller, 0);
+    for(u32 i = 0; i < UHCI_PORT_CAPACITY; ++i) {
+        controller->ports[i].connected = enable_port(controller, 0);
+    }
+
+    return true;
 }
 
 b8 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes) {
