@@ -180,7 +180,7 @@ void print_welcome_message(void) {
     terminal_print_string(str8(" to show the list of available commands.\n"));
 }
 
-void terminal_enter(void) {
+void terminal_initialize(void) {
     (void) print_unsigned_integer;
 
     terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
@@ -188,7 +188,9 @@ void terminal_enter(void) {
     terminal.configured_background = OS_DISPLAY_Black;
 
     print_welcome_message();
+}
 
+void terminal_run(void) {
     while(!os_ctrl_exit_requested()) {
         blit_to_screen(&terminal);
         const Text_Input_Signal text_input_signal = text_input_update(&terminal.text_input);

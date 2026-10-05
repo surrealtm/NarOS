@@ -4,6 +4,13 @@
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 #define PACKED_STRUCT __attribute__((packed))
+#define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
+
+// The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
+// These helpers shall be used when interacting with hardware that does direct memory access - whereas the
+// kernel code might use virtual paging later
+#define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
+#define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
 
 #define true 1
 #define false 0
@@ -12,11 +19,8 @@
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
 
-#if ENABLE_ASSERTIONS
-# define assert(condition, reason) if(!(condition)) panic(str8(reason))
-#else
-# define assert(condition, reason) {}
-#endif
+// @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
+#define assert(condition, reason) if(!(condition)) panic(str8(reason))
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -56,6 +60,7 @@ typedef struct Str8 {
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
+void memory_barrier(void);
 void panic(Str8 reason);
 
 void set_memory(void *dst, u8 value, u32 size_in_bytes);

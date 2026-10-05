@@ -2,6 +2,8 @@
 
 #include "base.h"
 
+#define NANOSECONDS_FROM_MILLISECONDS(milliseconds) ((milliseconds) * 1000000)
+
 /**
  * Halts any execution of code for the passed amount of nanoseconds.
  */

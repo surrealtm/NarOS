@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v0.2.0 - unreleased
+
+- Added PCI and UHCI protocols for device discovery and control [!28](https://github.com/surrealtm/NarOS/pull/28)
+
 ## v0.1.0 - 30.09.2026
 
 - Added boot loader that calls into custom kernel implementation [!1](https://github.com/surrealtm/NarOS/pull/1)

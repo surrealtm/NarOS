@@ -146,5 +146,5 @@ u64 interrupt_get_tick(void) {
 }
 
 u64 interrupt_ticks_from_nanoseconds(const u64 nanoseconds) {
-    return (nanoseconds / NANOSECONDS_TO_SECONDS) * TICKS_PER_SECOND;
+    return (nanoseconds * TICKS_PER_SECOND) / NANOSECONDS_TO_SECONDS;
 }
