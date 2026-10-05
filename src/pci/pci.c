@@ -108,6 +108,8 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
                 const b8 success = enable_bus_master(device) && uhci_initialize_controller(controller, get_bar_address(device, UHCI_IOBAR_OFFSET));
                 if(success) {
                     os_output_print(str8("Successfully initialized an UHCI device.\n"));
+                    if(uhci_is_port_connected(controller, 0)) os_output_print(str8("Port 0 is connected\n"));
+                    if(uhci_is_port_connected(controller, 1)) os_output_print(str8("Port 1 is connected\n"));
                 } else {
                     os_output_print(str8("Failed to initialize an UHCI device.\n"));
                 }
