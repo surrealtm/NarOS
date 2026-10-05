@@ -6,7 +6,7 @@
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
-#define INVALID_TRANSFER_DESCRIPTOR_INDEX -1
+#define INVALID_TRANSFER_DESCRIPTOR_INDEX UHCI_ERROR
 #define TRANSFER_DESCRIPTOR_ENCODED_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
 #define TRANSFER_DESCRIPTOR_DECODED_LENGTH(length)            ((length) != 0x7ff ? ((length) + 1) : 0)
 #define REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + maximum_packet_size - 1) / maximum_packet_size : 0)
@@ -17,11 +17,33 @@
 #define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
 
 // ---------------------------------------------------------------------------------------------------------------
-// UHCI Interaction
-// Port Mapping: https://wiki.osdev.org/Universal_Host_Controller_Interface
+// Helpers
 // ---------------------------------------------------------------------------------------------------------------
 
-typedef b8 (*Status_Check)(const UHCI_Controller *);
+static inline
+b8 validate_address(const u8 device_idx, const u8 endpoint_idx) {
+    return device_idx < UHCI_DEVICE_CAPACITY && endpoint_idx < UHCI_ENDPOINT_CAPACITY;
+}
+
+static
+b8 validate_device_speed(const UHCI_Device_Speed speed) {
+    switch(speed) {
+        case UHCI_DEVICE_SPEED_Low:   return true;
+        case UHCI_DEVICE_SPEED_Full:  return true;
+        case UHCI_DEVICE_SPEED_Error: return false;
+    }
+    return false;
+}
+
+static
+b8 validate_direction(const UHCI_Direction direction) {
+    switch(direction) {
+        case UHCI_DIRECTION_In:    return true;
+        case UHCI_DIRECTION_Out:   return true;
+        case UHCI_DIRECTION_COUNT: return false;
+    }
+    return false;
+}
 
 static inline
 b8 transfer_descriptor_has_error(const UHCI_Transfer_Descriptor *descriptor) {
@@ -33,6 +55,8 @@ b8 transfer_descriptor_is_short_packet(const UHCI_Transfer_Descriptor *descripto
     return !descriptor->status.active && descriptor->packet_header.packet_type == UHCI_PACKET_In && descriptor->status.short_packet_detect && (TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->status.transferred_length) < TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->packet_header.requested_length));
 }
 
+typedef b8 (*Status_Check)(const UHCI_Controller *);
+
 static
 b8 wait_for_status(const UHCI_Controller *controller, Status_Check check) {
     for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
@@ -43,6 +67,11 @@ b8 wait_for_status(const UHCI_Controller *controller, Status_Check check) {
     }
     return false;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// UHCI Interaction
+// Port Mapping: https://wiki.osdev.org/Universal_Host_Controller_Interface
+// ---------------------------------------------------------------------------------------------------------------
 
 static inline
 b8 is_halted(const UHCI_Controller *controller) {
@@ -283,7 +312,7 @@ s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_i
     }
 
     controller->active_transfer_descriptors = 0;
-    return successful ? number_of_bytes_transferred : -1;
+    return successful ? number_of_bytes_transferred : UHCI_ERROR;
 }
 
 static
@@ -319,8 +348,6 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 // ---------------------------------------------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
-
-// @Incomplete: Validate all input parameters for the API here...
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
     controller->pci_address = pci_address;
@@ -359,25 +386,26 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
 }
 
 UHCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, const u8 port_idx) {
+    if(port_idx >= UHCI_PORT_CAPACITY) return UHCI_DEVICE_SPEED_Error;
     const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
     const UHCI_Device_Speed speed = (current_status & UHCI_PORT_STATUS_Low_Speed) ? UHCI_DEVICE_SPEED_Low : UHCI_DEVICE_SPEED_Full;
     return speed;
 }
 
 b8 uhci_is_port_connected(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx > 1) return false;
+    if(port_idx >= UHCI_PORT_CAPACITY) return false;
     const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
     return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !(current_status & UHCI_PORT_STATUS_Suspended);
 }
 
 b8 uhci_is_port_enabled(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx > 1) return false;
+    if(port_idx >= UHCI_PORT_CAPACITY) return false;
     const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
     return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended);
 }
 
 b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx > 1) return false;
+    if(port_idx >= UHCI_PORT_CAPACITY) return false;
 
     {
         // Assert the `RESET` status for 50 milliseconds for the port to read it.
@@ -412,12 +440,14 @@ b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
 }
 
 b8 uhci_configure_device(UHCI_Controller *controller, const u8 device_idx, const UHCI_Device_Speed speed) {
+    if(!validate_address(device_idx, 0) || !validate_device_speed(speed)) return false;
     controller->devices[device_idx].speed = speed;
     set_data_toggles(&controller->devices[device_idx].endpoints[0], 0);
     return true;
 }
 
 b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Direction direction, const u16 maximum_packet_size) {
+    if(!validate_address(device_idx, endpoint_idx) || !validate_direction(direction) || maximum_packet_size == 0) return false;
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
     endpoint->maximum_packet_size[direction] = maximum_packet_size;
     set_data_toggle(endpoint, direction, 0);
@@ -425,21 +455,29 @@ b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, const u8 devic
 }
 
 s32 uhci_control_read(UHCI_Controller *controller, const u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes) {
+    if(header_size_in_bytes != 8 || header_data == null) return UHCI_ERROR;
+    if(payload_size_in_bytes > 0 && payload == null) return UHCI_ERROR;
+    if(!validate_address(device_idx, 0)) return UHCI_ERROR;
     return control(controller, device_idx, UHCI_PACKET_In, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
 s32 uhci_control_write(UHCI_Controller *controller, const u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes) {
+    if(header_size_in_bytes != 8 || header_data == null) return UHCI_ERROR;
+    if(payload_size_in_bytes > 0 && payload == null) return UHCI_ERROR;
+    if(!validate_address(device_idx, 0)) return UHCI_ERROR;
     return control(controller, device_idx, UHCI_PACKET_Out, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
 s32 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const void *data, u32 size_in_bytes) {
-    if(size_in_bytes == 0) return 0;
+    if(size_in_bytes == 0 || data == null) return 0;
+    if(!validate_address(device_idx, endpoint_idx)) return UHCI_ERROR;
     add_transfer_descriptors(controller, device_idx, endpoint_idx, UHCI_PACKET_Out, size_in_bytes, data);
     return submit(controller, device_idx, endpoint_idx, INVALID_TRANSFER_DESCRIPTOR_INDEX);
 }
 
 s32 uhci_bulk_read(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, void *data, const u32 size_in_bytes) {
-    if(size_in_bytes == 0) return 0;
+    if(size_in_bytes == 0 || data == null) return 0;
+    if(!validate_address(device_idx, endpoint_idx)) return UHCI_ERROR;
     add_transfer_descriptors(controller, device_idx, endpoint_idx, UHCI_PACKET_In, size_in_bytes, data);
     return submit(controller, device_idx, endpoint_idx, INVALID_TRANSFER_DESCRIPTOR_INDEX);
 }

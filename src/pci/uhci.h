@@ -2,6 +2,7 @@
 
 #include "pci.h"
 
+#define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
 #define UHCI_TRANSFER_DESCRIPTOR_CAPACITY 32
 #define UHCI_DEVICE_CAPACITY 128
@@ -13,8 +14,9 @@
 /* --------------------------------------------------------------------------------------------------------------- */
 
 typedef enum UHCI_Device_Speed {
-    UHCI_DEVICE_SPEED_Full = 0,
-    UHCI_DEVICE_SPEED_Low  = 1,
+    UHCI_DEVICE_SPEED_Full  = 0,
+    UHCI_DEVICE_SPEED_Low   = 1,
+    UHCI_DEVICE_SPEED_Error = 2,
 } UHCI_Device_Speed;
 
 typedef enum UHCI_Direction {
