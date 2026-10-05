@@ -127,7 +127,18 @@ typedef struct UHCI_Controller {
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 } UHCI_Controller;
 
-b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address);
+b8 uhci_initialize_controller(UHCI_Controller *controller, u32 pci_address);
+
+/**
+ * Returns whether the port at that index is connected and enabled.
+ */
+b8 uhci_is_port_enabled(const UHCI_Controller *controller, u8 port_idx);
+
+/**
+ * Issues a reset signal on the port and then attempts to enable it.
+ * Returns true if the port is now successfully enabled and connected.
+ */
+b8 uhci_reset_and_enable_port(UHCI_Controller *controller, u8 port_idx);
 
 /**
  * Issues a read control transaction to the controller for the specified device id.
