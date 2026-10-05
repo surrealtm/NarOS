@@ -1,6 +1,6 @@
 #include "pci.h"
-#include "uhci.h"
 #include "output.h"
+#include "uhci/uhci.h"
 #include "port/port.h"
 
 #define PCI_ADDRESS    0xcf8

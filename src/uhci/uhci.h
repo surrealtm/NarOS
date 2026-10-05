@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pci.h"
+#include "base.h"
 
 #define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
