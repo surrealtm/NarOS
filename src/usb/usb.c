@@ -1,4 +1,5 @@
 #include "usb.h"
+#include "usb/scsi.h"
 #include "uhci/uhci.h"
 
 #define INVALID_ENDPOINT U8_MAX
@@ -319,6 +320,11 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
     }
 
     if(!configure_device(device, controller)) {
+        return false;
+    }
+
+    SCSI_Inquiry inquiry = { 0 };
+    if(!scsi_inquire(device, controller, &inquiry)) {
         return false;
     }
 

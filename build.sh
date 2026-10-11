@@ -170,6 +170,7 @@ KERNEL_C_SOURCE_FILES=(
     "terminal/text_input.c"
     "uhci/uhci.c"
     "usb/usb.c"
+    "usb/scsi.c"
 )
 
 KERNEL_ASM_SOURCE_FILES=(
