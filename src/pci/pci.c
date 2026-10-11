@@ -1,6 +1,7 @@
 #include "pci.h"
 #include "output.h"
 #include "uhci/uhci.h"
+#include "usb/usb.h"
 #include "port/port.h"
 
 #define PCI_ADDRESS    0xcf8
@@ -17,22 +18,37 @@
 // ---------------------------------------------------------------------------------------------------------------
 
 #define MAX_UHCI_CONTROLLERS 1
+#define MAX_USB_DEVICES 1
 
 typedef struct Connected_Devices {
     UHCI_Controller uhci[MAX_UHCI_CONTROLLERS];
     u32 uhci_count;
+
+    USB_Device usb[MAX_USB_DEVICES];
+    u32 usb_count;
 } Connected_Devices;
 
 static Connected_Devices connected_devices = { 0 };
 
 static
 UHCI_Controller *allocate_uhci_controller(void) {
-    if(connected_devices.uhci_count == MAX_UHCI_CONTROLLERS) {
+    if(connected_devices.uhci_count >= MAX_UHCI_CONTROLLERS) {
         return null;
     }
 
     UHCI_Controller *pointer = &connected_devices.uhci[connected_devices.uhci_count++];
     set_memory(pointer, 0, sizeof(UHCI_Controller));
+    return pointer;
+}
+
+static
+USB_Device *allocate_usb_device(void) {
+    if(connected_devices.usb_count >= MAX_USB_DEVICES) {
+        return null;
+    }
+
+    USB_Device *pointer = &connected_devices.usb[connected_devices.usb_count++];
+    set_memory(pointer, 0, sizeof(USB_Device));
     return pointer;
 }
 
@@ -91,6 +107,38 @@ b8 enable_bus_master(const PCI_Device device) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
+UHCI_Controller *initialize_uhci_controller(const PCI_Device device) {
+    UHCI_Controller *controller = allocate_uhci_controller();
+    if(!controller) return null;
+
+    take_device_ownership(device);
+    const b8 success = enable_bus_master(device) && uhci_initialize_controller(controller, get_bar_address(device, UHCI_IOBAR_OFFSET));
+    if(success) {
+        os_output_print(str8("Successfully initialized an UHCI device.\n"));
+        return controller;
+    } else {
+        os_output_print(str8("Failed to initialize an UHCI device.\n"));
+        return null;
+    }
+}
+
+static
+void initialize_usb_devices(UHCI_Controller *controller) {
+    for(u8 port_idx = 0; port_idx < UHCI_PORT_CAPACITY; ++port_idx) {
+        if(uhci_reset_and_enable_port(controller, port_idx)) {
+            USB_Device *device = allocate_usb_device();
+            if(device) {
+                if(usb_initialize_device(device, controller, port_idx)) {
+                    os_output_print(str8("Successfully initialized a USB device.\n"));
+                } else {
+                    os_output_print(str8("Failed to initialize a USB device.\n"));
+                }
+            }
+        }
+    }
+}
+
+static
 void initialize_mass_storage_device(const PCI_Device device) {
     switch(device.subclass) {
         case MASS_STORAGE_DEVICE_IDE_Controller:
@@ -102,17 +150,9 @@ static
 void initialize_serial_bus_usb_controller(const PCI_Device device) {
     switch(device.interface) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
-            UHCI_Controller *controller = allocate_uhci_controller();
+            UHCI_Controller *controller = initialize_uhci_controller(device);
             if(controller) {
-                take_device_ownership(device);
-                const b8 success = enable_bus_master(device) && uhci_initialize_controller(controller, get_bar_address(device, UHCI_IOBAR_OFFSET));
-                if(success) {
-                    os_output_print(str8("Successfully initialized an UHCI device.\n"));
-                    if(uhci_is_port_connected(controller, 0)) os_output_print(str8("Port 0 is connected\n"));
-                    if(uhci_is_port_connected(controller, 1)) os_output_print(str8("Port 1 is connected\n"));
-                } else {
-                    os_output_print(str8("Failed to initialize an UHCI device.\n"));
-                }
+                initialize_usb_devices(controller);
             }
         } break;
     }

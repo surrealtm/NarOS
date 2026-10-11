@@ -44,21 +44,9 @@ typedef struct USB_Device_Descriptor {
     u8  configuration_count;
 } PACKED_STRUCT USB_Device_Descriptor;
 
-STATIC_ASSERT(sizeof(USB_Device_Descriptor) == 18);
-
-typedef struct USB_Device {
-    u8 address;
-    u8 configuration_value;
-    u8 bulk_in_endpoint;
-    u8 bulk_out_endpoint;
-    u8 bulk_in_packet_size;
-    u8 bulk_out_packet_size;
-} USB_Device;
-
-static
-b8 enumerate_port(UHCI_Controller *controller, const u8 port_idx, const u8 desired_address, USB_Device *device) {
+b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const u8 port_idx) {
     *device = (USB_Device) {
-        .address           = desired_address,
+        .address           = port_idx + 1,
         .bulk_in_endpoint  = INVALID_ENDPOINT,
         .bulk_out_endpoint = INVALID_ENDPOINT,
     };
@@ -98,12 +86,4 @@ b8 enumerate_port(UHCI_Controller *controller, const u8 port_idx, const u8 desir
     }
 
     return true;
-}
-
-b8 usb_initialize_device(UHCI_Controller *controller) {
-    for(u8 port = 0; port < UHCI_PORT_CAPACITY; ++port) {
-        USB_Device device;
-        enumerate_port(controller, port, port + 1, &device);
-    }
-    return false;
 }
