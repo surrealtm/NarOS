@@ -328,6 +328,11 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
         return false;
     }
 
+    SCSI_Read_Capacity capacity = { 0 };
+    if(!scsi_read_capacity(device, controller, &capacity)) {
+        return false;
+    }
+
     const u32 block_size = 512;
     char buffer[512];
     SCSI_Read read = { sizeof(buffer) / block_size, buffer };

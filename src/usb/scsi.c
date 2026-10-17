@@ -57,6 +57,17 @@ typedef struct SCSI_Command_Inquiry {
     const u8 control;
 } PACKED_STRUCT SCSI_Command_Inquiry;
 
+typedef struct SCSI_Command_Read_Capacity {
+    const u8 operation_code;
+    const u8 obsolete : 1;
+    const u8 reserved0 : 7;
+    const u32 logical_block_address;
+    const u16 reserved1;
+    const u8 pmi : 1;
+    const u8 reserved2 : 7;
+    const u8 control;
+} SCSI_Command_Read_Capacity;
+
 typedef struct SCSI_Command_Read {
     const u8 operation_code;
     const u8 obsolete : 1;
@@ -117,6 +128,23 @@ b8 scsi_inquire(const USB_Device *device, UHCI_Controller *controller, SCSI_Inqu
     };
 
     return scsi_execute(controller, device, &inquiry, sizeof(inquiry), result, sizeof(*result), SCSI_DIRECTION_To_Host);
+}
+
+b8 scsi_read_capacity(const USB_Device *device, UHCI_Controller *controller, SCSI_Read_Capacity *result) {
+    const u32 logical_block_address = 0x1;
+
+    const SCSI_Command_Read_Capacity read_capacity = {
+        .operation_code = SCSI_COMMAND_Read_Capacity,
+        .logical_block_address = u32_to_big_endian(logical_block_address),
+    };
+
+    if(!scsi_execute(controller, device, &read_capacity, sizeof(read_capacity), result, sizeof(*result), SCSI_DIRECTION_To_Host)) {
+        return false;
+    }
+
+    result->logical_block_address = u32_from_big_endian(result->logical_block_address);
+    result->block_size_in_bytes = u32_from_big_endian(result->block_size_in_bytes);
+    return true;
 }
 
 b8 scsi_read(const USB_Device *device, UHCI_Controller *controller, u32 logical_block_address, SCSI_Read *result) {

@@ -6,6 +6,9 @@
 #define PACKED_STRUCT __attribute__((packed))
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
 
+#define LITTLE_ENDIAN 1
+#define BIG_ENDIAN (!LITTLE_ENDIAN)
+
 // The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
 // These helpers shall be used when interacting with hardware that does direct memory access - whereas the
 // kernel code might use virtual paging later
@@ -73,3 +76,8 @@ void to_big_endian(void *dst, const void *src, u32 size_in_bytes);
 u64 u64_to_big_endian(u64 src);
 u32 u32_to_big_endian(u32 src);
 u16 u16_to_big_endian(u16 src);
+
+void from_big_endian(void *dst, const void *src, u32 size_in_bytes);
+u64 u64_from_big_endian(u64 src);
+u32 u32_from_big_endian(u32 src);
+u16 u16_from_big_endian(u16 src);

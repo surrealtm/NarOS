@@ -32,7 +32,10 @@ typedef struct SCSI_Inquiry {
     const char revision[4];
 } PACKED_STRUCT SCSI_Inquiry;
 
-STATIC_ASSERT(sizeof(SCSI_Inquiry) == 36);
+typedef struct SCSI_Read_Capacity {
+    u32 logical_block_address;
+    u32 block_size_in_bytes;
+} PACKED_STRUCT SCSI_Read_Capacity;
 
 typedef struct SCSI_Read {
     u16 requested_number_of_blocks;
@@ -40,4 +43,5 @@ typedef struct SCSI_Read {
 } SCSI_Read;
 
 b8 scsi_inquire(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Inquiry *result);
+b8 scsi_read_capacity(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Read_Capacity *result);
 b8 scsi_read(const struct USB_Device *device, struct UHCI_Controller *controller, u32 logical_block_address, SCSI_Read *result);
