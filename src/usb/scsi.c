@@ -2,8 +2,12 @@
 #include "uhci/uhci.h"
 #include "usb/usb.h"
 
+#define BLOCK_SECTOR_SIZE 512
+
 #define COMMAND_BLOCK_WRAPPER_SIGNATURE  0x43425355
 #define COMMAND_STATUS_WRAPPER_SIGNATURE 0x53425355
+
+#define EXTRACT_BYTE(value, byte_idx) (((u8 *) &(value))[byte_idx])
 
 typedef enum SCSI_Command {
     SCSI_COMMAND_Test_Unit_Ready   = 0x00,
@@ -82,14 +86,33 @@ b8 scsi_execute(UHCI_Controller *controller, const USB_Device *device, const u8 
 }
 
 b8 scsi_inquire(const USB_Device *device, UHCI_Controller *controller, SCSI_Inquiry *result) {
+    const u32 transfer_length = sizeof(*result);
+
     const u8 command_data[6] = {
         SCSI_COMMAND_Inquiry,
         0,
         0,
-        0,
-        sizeof(*result),
+        EXTRACT_BYTE(transfer_length, 0),
+        EXTRACT_BYTE(transfer_length, 1),
         0,
     };
 
     return scsi_execute(controller, device, command_data, sizeof(command_data), result, sizeof(*result), SCSI_DIRECTION_To_Host);
+}
+
+b8 scsi_read(const USB_Device *device, UHCI_Controller *controller, u32 logical_block_address, SCSI_Read *result) {
+    const u8 command_data[10] = {
+        SCSI_COMMAND_Read,
+        0,
+        EXTRACT_BYTE(logical_block_address, 3),
+        EXTRACT_BYTE(logical_block_address, 2),
+        EXTRACT_BYTE(logical_block_address, 1),
+        EXTRACT_BYTE(logical_block_address, 0),
+        0,
+        EXTRACT_BYTE(result->requested_number_of_blocks, 1),
+        EXTRACT_BYTE(result->requested_number_of_blocks, 0),
+        0,
+    };
+
+    return scsi_execute(controller, device, command_data, sizeof(command_data), result->buffer, result->requested_number_of_blocks * BLOCK_SECTOR_SIZE, SCSI_DIRECTION_To_Host);
 }
