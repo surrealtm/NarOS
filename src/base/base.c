@@ -109,3 +109,27 @@ void memset(void *dst, const u8 value, const u32 size_in_bytes) {
 void memcpy(void *dst, const void *src, const u32 size_in_bytes) {
     move_memory(dst, src, size_in_bytes);
 }
+
+void to_big_endian(void *dst, const void *src, u32 size_in_bytes) {
+    for(u32 i = 0; i < size_in_bytes; ++i) {
+        ((u8 *) dst)[i] = ((u8 *) src)[size_in_bytes - i - 1];
+    }
+}
+
+u64 u64_to_big_endian(const u64 src) {
+    u64 dst;
+    to_big_endian(&dst, &src, sizeof(u64));
+    return dst;
+}
+
+u32 u32_to_big_endian(const u32 src) {
+    u32 dst;
+    to_big_endian(&dst, &src, sizeof(u32));
+    return dst;
+}
+
+u16 u16_to_big_endian(const u16 src) {
+    u16 dst;
+    to_big_endian(&dst, &src, sizeof(u16));
+    return dst;
+}

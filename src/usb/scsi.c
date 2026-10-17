@@ -47,10 +47,35 @@ typedef struct Command_Status_Wrapper {
     u8 status;
 } PACKED_STRUCT Command_Status_Wrapper;
 
+typedef struct SCSI_Command_Inquiry {
+    const u8 operation_code;
+    const u8 evpd : 1;
+    const u8 obsolete : 1;
+    const u8 reserved : 6;
+    const u8 page_code;
+    const u16 allocation_length;
+    const u8 control;
+} PACKED_STRUCT SCSI_Command_Inquiry;
+
+typedef struct SCSI_Command_Read {
+    const u8 operation_code;
+    const u8 obsolete : 1;
+    const u8 fua_nv : 1;
+    const u8 reserved0 : 1;
+    const u8 fua : 1;
+    const u8 dpo : 1;
+    const u8 rdprotect : 3;
+    const u32 logical_block_address;
+    const u8 group_number : 5;
+    const u8 reserved1 : 3;
+    const u16 transfer_length;
+    const u8 control;
+} PACKED_STRUCT SCSI_Command_Read;
+
 static u32 scsi_tag = 1;
 
 static
-b8 scsi_execute(UHCI_Controller *controller, const USB_Device *device, const u8 command_data[16], const u8 command_length, void *data, const u32 data_length, const SCSI_Direction direction) {
+b8 scsi_execute(UHCI_Controller *controller, const USB_Device *device, const void *command_data, const u8 command_length, void *data, const u32 data_length, const SCSI_Direction direction) {
     Command_Block_Wrapper command_block = {
         .signature = COMMAND_BLOCK_WRAPPER_SIGNATURE,
         .tag = scsi_tag++,
@@ -86,33 +111,20 @@ b8 scsi_execute(UHCI_Controller *controller, const USB_Device *device, const u8 
 }
 
 b8 scsi_inquire(const USB_Device *device, UHCI_Controller *controller, SCSI_Inquiry *result) {
-    const u32 transfer_length = sizeof(*result);
-
-    const u8 command_data[6] = {
-        SCSI_COMMAND_Inquiry,
-        0,
-        0,
-        EXTRACT_BYTE(transfer_length, 0),
-        EXTRACT_BYTE(transfer_length, 1),
-        0,
+    const SCSI_Command_Inquiry inquiry = {
+        .operation_code = SCSI_COMMAND_Inquiry,
+        .allocation_length = u16_to_big_endian(sizeof(*result)),
     };
 
-    return scsi_execute(controller, device, command_data, sizeof(command_data), result, sizeof(*result), SCSI_DIRECTION_To_Host);
+    return scsi_execute(controller, device, &inquiry, sizeof(inquiry), result, sizeof(*result), SCSI_DIRECTION_To_Host);
 }
 
 b8 scsi_read(const USB_Device *device, UHCI_Controller *controller, u32 logical_block_address, SCSI_Read *result) {
-    const u8 command_data[10] = {
-        SCSI_COMMAND_Read,
-        0,
-        EXTRACT_BYTE(logical_block_address, 3),
-        EXTRACT_BYTE(logical_block_address, 2),
-        EXTRACT_BYTE(logical_block_address, 1),
-        EXTRACT_BYTE(logical_block_address, 0),
-        0,
-        EXTRACT_BYTE(result->requested_number_of_blocks, 1),
-        EXTRACT_BYTE(result->requested_number_of_blocks, 0),
-        0,
+    const SCSI_Command_Read read = {
+        .operation_code = SCSI_COMMAND_Read,
+        .logical_block_address = u32_to_big_endian(logical_block_address),
+        .transfer_length = u16_to_big_endian(result->requested_number_of_blocks),
     };
 
-    return scsi_execute(controller, device, command_data, sizeof(command_data), result->buffer, result->requested_number_of_blocks * BLOCK_SECTOR_SIZE, SCSI_DIRECTION_To_Host);
+    return scsi_execute(controller, device, &read, sizeof(read), result->buffer, result->requested_number_of_blocks * BLOCK_SECTOR_SIZE, SCSI_DIRECTION_To_Host);
 }

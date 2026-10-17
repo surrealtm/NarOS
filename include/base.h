@@ -68,3 +68,8 @@ void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);
+
+void to_big_endian(void *dst, const void *src, u32 size_in_bytes);
+u64 u64_to_big_endian(u64 src);
+u32 u32_to_big_endian(u32 src);
+u16 u16_to_big_endian(u16 src);
