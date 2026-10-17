@@ -9,7 +9,6 @@
 #define INVALID_TRANSFER_DESCRIPTOR_INDEX UHCI_ERROR
 #define TRANSFER_DESCRIPTOR_ENCODED_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
 #define TRANSFER_DESCRIPTOR_DECODED_LENGTH(length)            ((length) != 0x7ff ? ((length) + 1) : 0)
-#define REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + maximum_packet_size - 1) / maximum_packet_size : 0)
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
@@ -233,7 +232,7 @@ void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, 
     const UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
     const UHCI_Direction direction = direction_for_packet_type(packet_type);
     const u16 maximum_packet_size = get_maximum_packet_size(endpoint, direction);
-    const u32 descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes);
+    const u32 descriptor_count = align(size_in_bytes, maximum_packet_size);
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * maximum_packet_size;
         const u32 packet_size_in_bytes = min(size_in_bytes - offset_in_bytes, maximum_packet_size);

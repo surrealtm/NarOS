@@ -22,6 +22,8 @@
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
 
+#define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
+
 // @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
 #define assert(condition, reason) if(!(condition)) panic(str8(reason))
 
@@ -59,7 +61,7 @@ typedef struct Str8 {
 } Str8;
 
 #define str8_lit(literal) {literal, sizeof(literal) - 1}
-#define str8(literal) (Str8) str8_lit(literal)
+#define str8(literal) (Str8) {literal, cstring_length(literal)}
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 

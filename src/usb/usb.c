@@ -2,6 +2,8 @@
 #include "usb/scsi.h"
 #include "uhci/uhci.h"
 
+#include "output.h" // @Temporary: Only for printing the file content
+
 #define INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
 
@@ -333,12 +335,13 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
         return false;
     }
 
-    const u32 block_size = 512;
-    char buffer[512];
-    SCSI_Read read = { sizeof(buffer) / block_size, buffer };
+    char buffer[capacity.block_size_in_bytes];
+    SCSI_Read read = { align(sizeof(buffer), capacity.block_size_in_bytes), buffer };
     if(!scsi_read(device, controller, 0, &read)) {
         return false;
     }
+
+    os_output_print(str8(buffer));
 
     return true;
 }

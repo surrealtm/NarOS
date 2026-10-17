@@ -239,7 +239,7 @@ if [[ ${DEBUG_QEMU} == true || ${RUN_QEMU} == true ]]; then
     # Create a temporary file that QEMU can mount as the disk content
     HOST_PATH="/tmp/qemu_usb_drive.img"
     dd if=/dev/zero of=${HOST_PATH} bs=1M count=16 >/dev/null 2>&1
-    printf 'Hello World' | dd of="${HOST_PATH}" conv=notrunc status=none
+    printf 'This is some text stored on the USB mass storage.\n' | dd of="${HOST_PATH}" conv=notrunc status=none
     QEMU_USB_DRIVE_PARAMETERS="-drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device piix3-usb-uhci,id=uhci -device usb-storage,drive=usbdisk"
 fi
 
