@@ -133,26 +133,13 @@ typedef struct UHCI_Controller {
 } UHCI_Controller;
 
 /**
+ * Returns an uninitialized UHCI controller structure, or null if the capacity for controllers was reached
+ */
+UHCI_Controller *uhci_allocate_controller(void);
+
+/**
  * Creates an HCI_Controller structure for the given UHCI_Controller.
  * The UHCI_Controller must remain alive for the lifetime of the HCI_Controller.
  */
 HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci);
 
-/**
- * Returns an uninitialized UHCI controller structure, or null if the capacity for controllers was reached
- */
-UHCI_Controller *uhci_allocate_controller(void);
-
-// ------------------------------------------------- HCI API ----------------------------------------------
-
-b8 uhci_initialize_controller(UHCI_Controller *controller, u32 pci_address);
-s32 uhci_get_port_capacity(const UHCI_Controller *controller);
-HCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, u8 port_idx);
-b8 uhci_reset_and_enable_port(UHCI_Controller *controller, u8 port_idx);
-b8 uhci_configure_device(UHCI_Controller *controller, u8 device_idx, HCI_Device_Speed speed);
-b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, HCI_Direction direction, u16 maximum_packet_size);
-
-s32 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
-s32 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
-s32 uhci_bulk_write(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, const void *data, u32 size_in_bytes);
-s32 uhci_bulk_read(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, void *data, u32 size_in_bytes);
