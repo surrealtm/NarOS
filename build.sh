@@ -161,6 +161,7 @@ KERNEL_C_SOURCE_FILES=(
     "entry_point/entry_point.c"
     "hci/hci.c"
     "hci/uhci.c"
+    "hci/xhci.c"
     "input/input.c"
     "interrupt/interrupt.c"
     "math/math.c"

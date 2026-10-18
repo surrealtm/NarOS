@@ -1,6 +1,7 @@
 #include "pci.h"
 #include "output.h"
 #include "hci/uhci.h"
+#include "hci/xhci.h"
 #include "usb/usb.h"
 #include "port/port.h"
 
@@ -12,6 +13,7 @@
 
 #define UHCI_IOBAR_NUMBER 0x4
 #define UHCI_IOBAR_OFFSET 0x20
+#define XHCI_MEMORY_BAR_OFFSET 0x10
 
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -58,7 +60,7 @@ b8 take_device_ownership(const PCI_Device device) {
 
 static
 b8 enable_bus_master(const PCI_Device device) {
-    const u16 bus_master_mask = (1 << 2) | (1 << 0); // Enable bus master and IO decoding
+    const u16 bus_master_mask = (1 << 2) | (1 << 1) | (1 << 0); // Enable bus master plus memory and IO decoding
     const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER);
     if((current_configuration & bus_master_mask) == bus_master_mask) return true; // Already set up
     const u16 desired_configuration = current_configuration | bus_master_mask;
@@ -107,7 +109,11 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
         } break;
 
         case SERIAL_BUS_USB_CONTROLLER_XHCI: {
-            os_output_print(str8("Discovered an XHCI usb.\n"));
+            const u32 pci_address = get_bar_address(device, XHCI_MEMORY_BAR_OFFSET);
+            XHCI_Controller *xhci = xhci_allocate_controller();
+            if(xhci && enable_bus_master(device)) {
+                initialize_usb_devices(hci_controller_from_xhci(xhci), pci_address);
+            }
         } break;
     }
 }
