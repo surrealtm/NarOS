@@ -30,21 +30,21 @@ b8 validate_address(const u8 device_idx, const u8 endpoint_idx) {
 }
 
 static
-b8 validate_device_speed(const UHCI_Device_Speed speed) {
+b8 validate_device_speed(const HCI_Device_Speed speed) {
     switch(speed) {
-        case UHCI_DEVICE_SPEED_Low:   return true;
-        case UHCI_DEVICE_SPEED_Full:  return true;
-        case UHCI_DEVICE_SPEED_Error: return false;
+        case HCI_DEVICE_SPEED_Low:   return true;
+        case HCI_DEVICE_SPEED_Full:  return true;
+        case HCI_DEVICE_SPEED_Error: return false;
     }
     return false;
 }
 
 static
-b8 validate_direction(const UHCI_Direction direction) {
+b8 validate_direction(const HCI_Direction direction) {
     switch(direction) {
-        case UHCI_DIRECTION_In:    return true;
-        case UHCI_DIRECTION_Out:   return true;
-        case UHCI_DIRECTION_COUNT: return false;
+        case HCI_DIRECTION_In:    return true;
+        case HCI_DIRECTION_Out:   return true;
+        case HCI_DIRECTION_COUNT: return false;
     }
     return false;
 }
@@ -132,26 +132,34 @@ UHCI_Port_Status read_port_status(const UHCI_Controller *controller, const u32 p
     return (UHCI_Port_Status) port_read_u16(controller->ports[port_idx].register_address);
 }
 
+static
+b8 is_port_enabled(const UHCI_Controller *controller, const u8 port_idx) {
+    if(port_idx >= UHCI_PORT_CAPACITY) return false;
+    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
+    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended);
+}
+
+
 // ---------------------------------------------------------------------------------------------------------------
 // Endpoint Handling
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-UHCI_Direction direction_for_packet_type(const UHCI_Packet_Type packet_type) {
+HCI_Direction direction_for_packet_type(const UHCI_Packet_Type packet_type) {
     switch(packet_type) {
-        case UHCI_PACKET_In: return UHCI_DIRECTION_In;
-        case UHCI_PACKET_Out: return UHCI_DIRECTION_Out;
-        default: return UHCI_DIRECTION_COUNT;
+        case UHCI_PACKET_In: return HCI_DIRECTION_In;
+        case UHCI_PACKET_Out: return HCI_DIRECTION_Out;
+        default: return HCI_DIRECTION_COUNT;
     }
 }
 
 static
-b8 is_valid_direction(const UHCI_Direction direction) {
-    return direction >= 0 && direction < UHCI_DIRECTION_COUNT;
+b8 is_valid_direction(const HCI_Direction direction) {
+    return direction >= 0 && direction < HCI_DIRECTION_COUNT;
 }
 
 static
-void set_data_toggle(UHCI_Endpoint *endpoint, const UHCI_Direction direction, const u8 desired_toggle) {
+void set_data_toggle(UHCI_Endpoint *endpoint, const HCI_Direction direction, const u8 desired_toggle) {
     if(!is_valid_direction(direction)) return;
     endpoint->next_data_toggle[direction] = desired_toggle;
 }
@@ -164,7 +172,7 @@ void set_data_toggles(UHCI_Endpoint *endpoint, const u8 desired_toggle) {
 }
 
 static
-u8 get_and_advance_data_toggle(UHCI_Endpoint *endpoint, const UHCI_Direction direction) {
+u8 get_and_advance_data_toggle(UHCI_Endpoint *endpoint, const HCI_Direction direction) {
     if(!is_valid_direction(direction)) return 0;
     const u8 data_toggle = endpoint->next_data_toggle[direction];
     endpoint->next_data_toggle[direction] = !data_toggle;
@@ -172,7 +180,7 @@ u8 get_and_advance_data_toggle(UHCI_Endpoint *endpoint, const UHCI_Direction dir
 }
 
 static
-u16 get_maximum_packet_size(const UHCI_Endpoint *endpoint, const UHCI_Direction direction) {
+u16 get_maximum_packet_size(const UHCI_Endpoint *endpoint, const HCI_Direction direction) {
     if(!is_valid_direction(direction)) return 0;
     return endpoint->maximum_packet_size[direction];
 }
@@ -222,10 +230,10 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
 
     const u32 error_retry_counter = 3;
     const u32 short_packet_detect = (packet_type == UHCI_PACKET_In && requested_length > 0) ? 1 : 0;
-    const UHCI_Direction direction = direction_for_packet_type(packet_type);
+    const HCI_Direction direction = direction_for_packet_type(packet_type);
 
     const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = true };
-    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .transferred_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(0), .error_retry_counter = error_retry_counter, .active = 1, .short_packet_detect = short_packet_detect, .low_speed = device->speed };
+    const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .transferred_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(0), .error_retry_counter = error_retry_counter, .active = 1, .short_packet_detect = short_packet_detect, .low_speed = device->speed == HCI_DEVICE_SPEED_Low };
     const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, direction), .requested_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(requested_length) };
     controller->transfer_descriptors[controller->active_transfer_descriptors] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data) };
 
@@ -235,7 +243,7 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
 static
 void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Packet_Type packet_type, const u32 size_in_bytes, const void *data) {
     const UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
-    const UHCI_Direction direction = direction_for_packet_type(packet_type);
+    const HCI_Direction direction = direction_for_packet_type(packet_type);
     const u16 maximum_packet_size = get_maximum_packet_size(endpoint, direction);
     const u32 descriptor_count = align(size_in_bytes, maximum_packet_size);
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
@@ -348,21 +356,11 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 }
 
 
-
 // ---------------------------------------------------------------------------------------------------------------
-// Public API
+// HCI Interface
 // ---------------------------------------------------------------------------------------------------------------
 
-UHCI_Controller *uhci_allocate_controller(void) {
-    if(uhci_controller_count >= UHCI_MAX_CONTROLLERS) {
-        return null;
-    }
-
-    UHCI_Controller *controller = &uhci_controllers[uhci_controller_count++];
-    ZERO_STRUCT(controller);
-    return controller;
-}
-
+static
 b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
     controller->pci_address = pci_address;
     controller->queue_head  = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 1 } };
@@ -399,25 +397,21 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     return true;
 }
 
-UHCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx >= UHCI_PORT_CAPACITY) return UHCI_DEVICE_SPEED_Error;
+static
+s32 uhci_get_port_capacity(const UHCI_Controller *controller) {
+    (void) controller;
+    return UHCI_PORT_CAPACITY;
+}
+
+static
+HCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, const u8 port_idx) {
+    if(port_idx >= UHCI_PORT_CAPACITY) return HCI_DEVICE_SPEED_Error;
     const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-    const UHCI_Device_Speed speed = (current_status & UHCI_PORT_STATUS_Low_Speed) ? UHCI_DEVICE_SPEED_Low : UHCI_DEVICE_SPEED_Full;
+    const HCI_Device_Speed speed = (current_status & UHCI_PORT_STATUS_Low_Speed) ? HCI_DEVICE_SPEED_Low : HCI_DEVICE_SPEED_Full;
     return speed;
 }
 
-b8 uhci_is_port_connected(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx >= UHCI_PORT_CAPACITY) return false;
-    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !(current_status & UHCI_PORT_STATUS_Suspended);
-}
-
-b8 uhci_is_port_enabled(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx >= UHCI_PORT_CAPACITY) return false;
-    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended);
-}
-
+static
 b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
     if(port_idx >= UHCI_PORT_CAPACITY) return false;
 
@@ -444,7 +438,7 @@ b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
     {
         // Wait for a valid startup for this port
         for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-            if(uhci_is_port_enabled(controller, port_idx)) {
+            if(is_port_enabled(controller, port_idx)) {
                 return true;
             }
             os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
@@ -453,14 +447,16 @@ b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
     }
 }
 
-b8 uhci_configure_device(UHCI_Controller *controller, const u8 device_idx, const UHCI_Device_Speed speed) {
+static
+b8 uhci_configure_device(UHCI_Controller *controller, const u8 device_idx, const HCI_Device_Speed speed) {
     if(!validate_address(device_idx, 0) || !validate_device_speed(speed)) return false;
     controller->devices[device_idx].speed = speed;
     set_data_toggles(&controller->devices[device_idx].endpoints[0], 0);
     return true;
 }
 
-b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Direction direction, const u16 maximum_packet_size) {
+static
+b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const HCI_Direction direction, const u16 maximum_packet_size) {
     if(!validate_address(device_idx, endpoint_idx) || !validate_direction(direction) || maximum_packet_size == 0) return false;
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
     endpoint->maximum_packet_size[direction] = maximum_packet_size;
@@ -468,6 +464,7 @@ b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, const u8 devic
     return true;
 }
 
+static
 s32 uhci_control_read(UHCI_Controller *controller, const u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes) {
     if(header_size_in_bytes != 8 || header_data == null) return UHCI_ERROR;
     if(payload_size_in_bytes > 0 && payload == null) return UHCI_ERROR;
@@ -475,6 +472,7 @@ s32 uhci_control_read(UHCI_Controller *controller, const u8 device_idx, void *he
     return control(controller, device_idx, UHCI_PACKET_In, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
+static
 s32 uhci_control_write(UHCI_Controller *controller, const u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes) {
     if(header_size_in_bytes != 8 || header_data == null) return UHCI_ERROR;
     if(payload_size_in_bytes > 0 && payload == null) return UHCI_ERROR;
@@ -482,6 +480,7 @@ s32 uhci_control_write(UHCI_Controller *controller, const u8 device_idx, const v
     return control(controller, device_idx, UHCI_PACKET_Out, header_data, header_size_in_bytes, payload, payload_size_in_bytes);
 }
 
+static
 s32 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const void *data, u32 size_in_bytes) {
     if(size_in_bytes == 0 || data == null) return 0;
     if(!validate_address(device_idx, endpoint_idx)) return UHCI_ERROR;
@@ -489,10 +488,42 @@ s32 uhci_bulk_write(UHCI_Controller *controller, const u8 device_idx, const u8 e
     return submit(controller, device_idx, endpoint_idx, INVALID_TRANSFER_DESCRIPTOR_INDEX);
 }
 
+static
 s32 uhci_bulk_read(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, void *data, const u32 size_in_bytes) {
     if(size_in_bytes == 0 || data == null) return 0;
     if(!validate_address(device_idx, endpoint_idx)) return UHCI_ERROR;
     add_transfer_descriptors(controller, device_idx, endpoint_idx, UHCI_PACKET_In, size_in_bytes, data);
     return submit(controller, device_idx, endpoint_idx, INVALID_TRANSFER_DESCRIPTOR_INDEX);
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------
+
+UHCI_Controller *uhci_allocate_controller(void) {
+    if(uhci_controller_count >= UHCI_MAX_CONTROLLERS) {
+        return null;
+    }
+
+    UHCI_Controller *controller = &uhci_controllers[uhci_controller_count++];
+    ZERO_STRUCT(controller);
+    return controller;
+}
+
+HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
+    return (HCI_Controller) {
+        uhci,
+        (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Get_Port_Capacity) uhci_get_port_capacity,
+        (HCI_Get_Port_Speed) uhci_get_port_speed,
+        (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,
+        (HCI_Configure_Device) uhci_configure_device,
+        (HCI_Configure_Endpoint_Direction) uhci_configure_endpoint_direction,
+        (HCI_Control_Read) uhci_control_read,
+        (HCI_Control_Write) uhci_control_write,
+        (HCI_Bulk_Read) uhci_bulk_read,
+        (HCI_Bulk_Write) uhci_bulk_write,
+    };
 }
 

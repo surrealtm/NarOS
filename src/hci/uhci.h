@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.h"
+#include "hci.h"
 
 #define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
@@ -8,24 +9,6 @@
 #define UHCI_DEVICE_CAPACITY 128
 #define UHCI_PORT_CAPACITY 2
 #define UHCI_ENDPOINT_CAPACITY 16
-
-/* --------------------------------------------------------------------------------------------------------------- */
-/* Helper Types                                                                                                    */
-/* --------------------------------------------------------------------------------------------------------------- */
-
-typedef enum UHCI_Device_Speed {
-    UHCI_DEVICE_SPEED_Full  = 0,
-    UHCI_DEVICE_SPEED_Low   = 1,
-    UHCI_DEVICE_SPEED_Error = 2,
-} UHCI_Device_Speed;
-
-typedef enum UHCI_Direction {
-    UHCI_DIRECTION_In = 0,
-    UHCI_DIRECTION_Out = 1,
-    UHCI_DIRECTION_COUNT = 2,
-} UHCI_Direction;
-
-
 
 /* --------------------------------------------------------------------------------------------------------------- */
 /* UHCI Protocol                                                                                                   */
@@ -125,13 +108,13 @@ typedef struct UHCI_Queue_Head {
 /* --------------------------------------------------------------------------------------------------------------- */
 
 typedef struct UHCI_Endpoint {
-    u8 next_data_toggle[UHCI_DIRECTION_COUNT]; // Track this separately for each direction
-    u16 maximum_packet_size[UHCI_DIRECTION_COUNT];
+    u8 next_data_toggle[HCI_DIRECTION_COUNT]; // Track this separately for each direction
+    u16 maximum_packet_size[HCI_DIRECTION_COUNT];
 } UHCI_Endpoint;
 
 typedef struct UHCI_Device {
     UHCI_Endpoint endpoints[UHCI_ENDPOINT_CAPACITY];
-    UHCI_Device_Speed speed;
+    HCI_Device_Speed speed;
 } UHCI_Device;
 
 typedef struct UHCI_Port {
@@ -155,65 +138,8 @@ typedef struct UHCI_Controller {
 UHCI_Controller *uhci_allocate_controller(void);
 
 /**
- * Initializes the controller structure and configures the hardware controller at the given pci address.
- * Returns true if the hardware controller was successfully reset and enabled
+ * Creates an HCI_Controller structure for the given UHCI_Controller.
+ * The UHCI_Controller must remain alive for the lifetime of the HCI_Controller.
  */
-b8 uhci_initialize_controller(UHCI_Controller *controller, u32 pci_address);
+HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci);
 
-/**
- * Returns the device speed for the given port. This must be used when enumerating devices through the port.
- */
-UHCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, u8 port_idx);
-
-/**
- * Returns whether the port at that index is connected.
- */
-b8 uhci_is_port_connected(const UHCI_Controller *controller, u8 port_idx);
-
-/**
- * Returns whether the port at that index is connected and enabled.
- */
-b8 uhci_is_port_enabled(const UHCI_Controller *controller, u8 port_idx);
-
-/**
- * Issues a reset signal on the port and then attempts to enable it.
- * Returns true if the port is now successfully enabled and connected.
- */
-b8 uhci_reset_and_enable_port(UHCI_Controller *controller, u8 port_idx);
-
-/**
- * Sets the devices transmission speed and resets the data toggles for the first endpoint.
- */
-b8 uhci_configure_device(UHCI_Controller *controller, u8 device_idx, UHCI_Device_Speed speed);
-
-/**
- * Sets the maximum packet size for a specific endpoint. This maximum packet size should be derived from
- * a device descriptor read through control interactions.
- */
-b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, UHCI_Direction direction, u16 maximum_packet_size);
-
-/**
- * Issues a read control transaction to the controller for the specified device id.
- * The header data is expected to be exactly 8 bytes long, the payload size is variable.
- * Returns the number of bytes read, or -1 on error.
- */
-s32 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
-
-/**
- * Issues a write control transaction on the controller for the specified device id.
- * The header data is expected to be exactly 8 bytes long, the payload size is variable.
- * Returns the number of bytes read, or -1 on error.
- */
-s32 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
-
-/**
- * Writes a bulk of data to the controller.
- * Returns the number of bytes written, or -1 on error.
- */
-s32 uhci_bulk_write(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, const void *data, u32 size_in_bytes);
-
-/**
- * Reads a bulk of data from the controller.
- * Returns the number of bytes read, or -1 on error.
- */
-s32 uhci_bulk_read(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, void *data, u32 size_in_bytes);
