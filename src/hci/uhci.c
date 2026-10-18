@@ -365,6 +365,7 @@ HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
     return (HCI_Controller) {
         uhci,
         (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Get_Port_Capacity) uhci_get_port_capacity,
         (HCI_Get_Port_Speed) uhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,
         (HCI_Configure_Device) uhci_configure_device,
@@ -420,6 +421,11 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     issue_command(controller, UHCI_COMMAND_Start | UHCI_COMMAND_Configure | UHCI_COMMAND_MaxPacket64);
 
     return true;
+}
+
+s32 uhci_get_port_capacity(const UHCI_Controller *controller) {
+    (void) controller;
+    return UHCI_PORT_CAPACITY;
 }
 
 HCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, const u8 port_idx) {

@@ -4,6 +4,10 @@ b8 hci_initialize_controller(const HCI_Controller *controller, const u32 pci_add
     return controller->initialize_controller(controller->controller_impl, pci_address);
 }
 
+s32 hci_get_port_capacity(const HCI_Controller *controller) {
+    return controller->get_port_capacity(controller->controller_impl);
+}
+
 HCI_Device_Speed hci_get_port_speed(const HCI_Controller *controller, const u8 port_idx) {
     return controller->get_port_speed(controller->controller_impl, port_idx);
 }

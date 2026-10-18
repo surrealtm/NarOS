@@ -146,6 +146,7 @@ UHCI_Controller *uhci_allocate_controller(void);
 // ------------------------------------------------- HCI API ----------------------------------------------
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, u32 pci_address);
+s32 uhci_get_port_capacity(const UHCI_Controller *controller);
 HCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, u8 port_idx);
 b8 uhci_reset_and_enable_port(UHCI_Controller *controller, u8 port_idx);
 b8 uhci_configure_device(UHCI_Controller *controller, u8 device_idx, HCI_Device_Speed speed);

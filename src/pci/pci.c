@@ -86,7 +86,8 @@ UHCI_Controller *initialize_uhci_controller(const PCI_Device device) {
 
 static
 void initialize_usb_devices(HCI_Controller controller) {
-    for(u8 port_idx = 0; port_idx < UHCI_PORT_CAPACITY; ++port_idx) {
+    const s32 port_capacity = hci_get_port_capacity(&controller);
+    for(u8 port_idx = 0; port_idx < port_capacity; ++port_idx) {
         if(hci_reset_and_enable_port(&controller, port_idx)) {
             USB_Device *device = usb_allocate_device();
             if(device) {

@@ -15,6 +15,7 @@ typedef enum HCI_Direction {
 } HCI_Direction;
 
 typedef b8(*HCI_Initialize_Controller)(void *controller_impl,  u32 pci_adddress);
+typedef s32(*HCI_Get_Port_Capacity)(void *controller_impl);
 typedef HCI_Device_Speed(*HCI_Get_Port_Speed)(void *controller_impl,  u8 port_idx);
 typedef b8(*HCI_Reset_And_Enable_Port)(void *controller_impl,  u8 port_idx);
 typedef b8(*HCI_Configure_Device)(void *controller_impl,  u8 device_idx,  HCI_Device_Speed device_speed);
@@ -32,6 +33,7 @@ typedef s32(*HCI_Bulk_Read)(void *controller_impl,  u8 device_idx,  u8 endpoint_
 typedef struct HCI_Controller {
     void *controller_impl;
     HCI_Initialize_Controller initialize_controller;
+    HCI_Get_Port_Capacity get_port_capacity;
     HCI_Get_Port_Speed get_port_speed;
     HCI_Reset_And_Enable_Port reset_and_enable_port;
     HCI_Configure_Device configure_device;
@@ -47,6 +49,12 @@ typedef struct HCI_Controller {
  * Returns true if the hardware controller was successfully reset and enabled
  */
 b8 hci_initialize_controller(const HCI_Controller *controller, u32 pci_address);
+
+/**
+ * Returns how many ports this specific controller supports, which depends on the underlying protocol
+ * and the hardware device.
+ */
+s32 hci_get_port_capacity(const HCI_Controller *controller);
 
 /**
  * Returns the device speed for the given port. This must be used when enumerating devices through the port.
