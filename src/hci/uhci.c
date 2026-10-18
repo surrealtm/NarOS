@@ -353,6 +353,14 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
 
+HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
+    return (HCI_Controller) {
+        uhci,
+        (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,
+    };
+}
+
 UHCI_Controller *uhci_allocate_controller(void) {
     if(uhci_controller_count >= UHCI_MAX_CONTROLLERS) {
         return null;

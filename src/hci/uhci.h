@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.h"
+#include "hci.h"
 
 #define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
@@ -148,6 +149,12 @@ typedef struct UHCI_Controller {
     UHCI_Port ports[UHCI_PORT_CAPACITY];
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 } UHCI_Controller;
+
+/**
+ * Creates an HCI_Controller structure for the given UHCI_Controller.
+ * The UHCI_Controller must remain alive for the lifetime of the HCI_Controller.
+ */
+HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci);
 
 /**
  * Returns an uninitialized UHCI controller structure, or null if the capacity for controllers was reached
