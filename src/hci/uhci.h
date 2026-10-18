@@ -11,26 +11,6 @@
 #define UHCI_ENDPOINT_CAPACITY 16
 
 /* --------------------------------------------------------------------------------------------------------------- */
-/* Helper Types                                                                                                    */
-/* --------------------------------------------------------------------------------------------------------------- */
-
-// @Cleanup: Remove these, as they are now part of hci.h?
-
-typedef enum UHCI_Device_Speed {
-    UHCI_DEVICE_SPEED_Full  = 0,
-    UHCI_DEVICE_SPEED_Low   = 1,
-    UHCI_DEVICE_SPEED_Error = 2,
-} UHCI_Device_Speed;
-
-typedef enum UHCI_Direction {
-    UHCI_DIRECTION_In = 0,
-    UHCI_DIRECTION_Out = 1,
-    UHCI_DIRECTION_COUNT = 2,
-} UHCI_Direction;
-
-
-
-/* --------------------------------------------------------------------------------------------------------------- */
 /* UHCI Protocol                                                                                                   */
 /* --------------------------------------------------------------------------------------------------------------- */
 
@@ -128,13 +108,13 @@ typedef struct UHCI_Queue_Head {
 /* --------------------------------------------------------------------------------------------------------------- */
 
 typedef struct UHCI_Endpoint {
-    u8 next_data_toggle[UHCI_DIRECTION_COUNT]; // Track this separately for each direction
-    u16 maximum_packet_size[UHCI_DIRECTION_COUNT];
+    u8 next_data_toggle[HCI_DIRECTION_COUNT]; // Track this separately for each direction
+    u16 maximum_packet_size[HCI_DIRECTION_COUNT];
 } UHCI_Endpoint;
 
 typedef struct UHCI_Device {
     UHCI_Endpoint endpoints[UHCI_ENDPOINT_CAPACITY];
-    UHCI_Device_Speed speed;
+    HCI_Device_Speed speed;
 } UHCI_Device;
 
 typedef struct UHCI_Port {
@@ -166,10 +146,10 @@ UHCI_Controller *uhci_allocate_controller(void);
 // ------------------------------------------------- HCI API ----------------------------------------------
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, u32 pci_address);
-UHCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, u8 port_idx);
+HCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, u8 port_idx);
 b8 uhci_reset_and_enable_port(UHCI_Controller *controller, u8 port_idx);
-b8 uhci_configure_device(UHCI_Controller *controller, u8 device_idx, UHCI_Device_Speed speed);
-b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, UHCI_Direction direction, u16 maximum_packet_size);
+b8 uhci_configure_device(UHCI_Controller *controller, u8 device_idx, HCI_Device_Speed speed);
+b8 uhci_configure_endpoint_direction(UHCI_Controller *controller, u8 device_idx, u8 endpoint_idx, HCI_Direction direction, u16 maximum_packet_size);
 
 s32 uhci_control_read(UHCI_Controller *controller, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
 s32 uhci_control_write(UHCI_Controller *controller, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
