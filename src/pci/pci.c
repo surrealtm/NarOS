@@ -1,6 +1,6 @@
 #include "pci.h"
 #include "output.h"
-#include "uhci/uhci.h"
+#include "hci/uhci.h"
 #include "usb/usb.h"
 #include "port/port.h"
 

@@ -1,6 +1,6 @@
 #include "usb.h"
 #include "usb/scsi.h"
-#include "uhci/uhci.h"
+#include "hci/uhci.h"
 
 #include "output.h" // @Temporary: Only for printing the file content
 

@@ -159,6 +159,7 @@ KERNEL_C_SOURCE_FILES=(
     "ctrl/ctrl.c"
     "display/display.c"
     "entry_point/entry_point.c"
+    "hci/uhci.c"
     "input/input.c"
     "interrupt/interrupt.c"
     "math/math.c"
@@ -168,7 +169,6 @@ KERNEL_C_SOURCE_FILES=(
     "terminal/command_dispatch.c"
     "terminal/terminal.c"
     "terminal/text_input.c"
-    "uhci/uhci.c"
     "usb/usb.c"
     "usb/scsi.c"
 )

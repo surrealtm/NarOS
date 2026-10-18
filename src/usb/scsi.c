@@ -1,5 +1,5 @@
 #include "scsi.h"
-#include "uhci/uhci.h"
+#include "hci/uhci.h"
 #include "usb/usb.h"
 
 #define COMMAND_BLOCK_WRAPPER_SIGNATURE  0x43425355
