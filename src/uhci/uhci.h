@@ -149,6 +149,9 @@ typedef struct UHCI_Controller {
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 } UHCI_Controller;
 
+/**
+ * Returns an uninitialized UHCI controller structure, or null if the capacity for controllers was reached
+ */
 UHCI_Controller *uhci_allocate_controller(void);
 
 /**

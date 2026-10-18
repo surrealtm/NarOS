@@ -350,8 +350,7 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
     }
 
     char buffer[capacity.block_size_in_bytes];
-    SCSI_Read read = { align(sizeof(buffer), capacity.block_size_in_bytes), buffer };
-    if(!scsi_read(device, controller, 0, &read)) {
+    if(!scsi_read(device, controller, 0, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
         return false;
     }
 

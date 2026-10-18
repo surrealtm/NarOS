@@ -167,15 +167,15 @@ b8 scsi_read_capacity(const USB_Device *device, UHCI_Controller *controller, SCS
     return true;
 }
 
-b8 scsi_read(const USB_Device *device, UHCI_Controller *controller, const u32 logical_block_address, SCSI_Read *result) {
+b8 scsi_read(const USB_Device *device, UHCI_Controller *controller, const u32 logical_block_address, const u16 block_count, void *data) {
     const SCSI_Command_Read read = {
         .operation_code = SCSI_COMMAND_Read,
         .logical_block_address = u32_to_big_endian(logical_block_address),
-        .transfer_length = u16_to_big_endian(result->requested_number_of_blocks),
+        .transfer_length = u16_to_big_endian(block_count),
     };
 
     const u32 block_sector_size = determine_block_sector_size(device, controller);
-    return scsi_execute(controller, device, &read, sizeof(read), result->buffer, result->requested_number_of_blocks * block_sector_size, SCSI_DIRECTION_To_Host);
+    return scsi_execute(controller, device, &read, sizeof(read), data, block_count * block_sector_size, SCSI_DIRECTION_To_Host);
 }
 
 b8 scsi_write(const USB_Device *device, UHCI_Controller *controller, const u32 logical_block_address, const u16 number_of_blocks, const void *data) {
