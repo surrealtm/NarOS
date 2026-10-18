@@ -6,11 +6,16 @@
 #define PACKED_STRUCT __attribute__((packed))
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
 
+#define LITTLE_ENDIAN 1
+#define BIG_ENDIAN (!LITTLE_ENDIAN)
+
 // The kernel is currently compiled and running without any memory mapping, but maybe that will change later.
 // These helpers shall be used when interacting with hardware that does direct memory access - whereas the
 // kernel code might use virtual paging later
 #define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
 #define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
+
+#define ZERO_STRUCT(pointer) set_memory(pointer, 0, sizeof(*pointer))
 
 #define true 1
 #define false 0
@@ -18,6 +23,8 @@
 
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
+
+#define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
 
 // @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
 #define assert(condition, reason) if(!(condition)) panic(str8(reason))
@@ -56,7 +63,7 @@ typedef struct Str8 {
 } Str8;
 
 #define str8_lit(literal) {literal, sizeof(literal) - 1}
-#define str8(literal) (Str8) str8_lit(literal)
+#define str8(literal) (Str8) {literal, cstring_length(literal)}
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
@@ -68,3 +75,13 @@ void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);
+
+void to_big_endian(void *dst, const void *src, u32 size_in_bytes);
+u64 u64_to_big_endian(u64 src);
+u32 u32_to_big_endian(u32 src);
+u16 u16_to_big_endian(u16 src);
+
+void from_big_endian(void *dst, const void *src, u32 size_in_bytes);
+u64 u64_from_big_endian(u64 src);
+u32 u32_from_big_endian(u32 src);
+u16 u16_from_big_endian(u16 src);

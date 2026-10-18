@@ -3,18 +3,22 @@
 #include "ctrl.h"
 #include "port/port.h"
 
+#define UHCI_MAX_CONTROLLERS 1
+
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
 #define INVALID_TRANSFER_DESCRIPTOR_INDEX UHCI_ERROR
 #define TRANSFER_DESCRIPTOR_ENCODED_LENGTH(size_in_bytes)     ((size_in_bytes) > 0 ? (size_in_bytes) - 1 : 0x7ff)
 #define TRANSFER_DESCRIPTOR_DECODED_LENGTH(length)            ((length) != 0x7ff ? ((length) + 1) : 0)
-#define REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes) (size_in_bytes > 0  ? (size_in_bytes + maximum_packet_size - 1) / maximum_packet_size : 0)
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
 #define TRANSFER_DESCRIPTOR_ADDRESS(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
 #define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
+
+static UHCI_Controller uhci_controllers[UHCI_MAX_CONTROLLERS];
+static u32 uhci_controller_count = 0;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -233,7 +237,7 @@ void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, 
     const UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
     const UHCI_Direction direction = direction_for_packet_type(packet_type);
     const u16 maximum_packet_size = get_maximum_packet_size(endpoint, direction);
-    const u32 descriptor_count = REQUIRED_TRANSFER_DESCRIPTORS(maximum_packet_size, size_in_bytes);
+    const u32 descriptor_count = align(size_in_bytes, maximum_packet_size);
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * maximum_packet_size;
         const u32 packet_size_in_bytes = min(size_in_bytes - offset_in_bytes, maximum_packet_size);
@@ -348,6 +352,16 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 // ---------------------------------------------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
+
+UHCI_Controller *uhci_allocate_controller(void) {
+    if(uhci_controller_count >= UHCI_MAX_CONTROLLERS) {
+        return null;
+    }
+
+    UHCI_Controller *controller = &uhci_controllers[uhci_controller_count++];
+    ZERO_STRUCT(controller);
+    return controller;
+}
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
     controller->pci_address = pci_address;
