@@ -85,9 +85,9 @@ UHCI_Controller *initialize_uhci_controller(const PCI_Device device) {
 }
 
 static
-void initialize_usb_devices(UHCI_Controller *controller) {
+void initialize_usb_devices(HCI_Controller controller) {
     for(u8 port_idx = 0; port_idx < UHCI_PORT_CAPACITY; ++port_idx) {
-        if(uhci_reset_and_enable_port(controller, port_idx)) {
+        if(hci_reset_and_enable_port(&controller, port_idx)) {
             USB_Device *device = usb_allocate_device();
             if(device) {
                 if(usb_initialize_device(device, controller, port_idx)) {
@@ -114,7 +114,7 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
             UHCI_Controller *controller = initialize_uhci_controller(device);
             if(controller) {
-                initialize_usb_devices(controller);
+                initialize_usb_devices(hci_controller_from_uhci(controller));
             }
         } break;
     }

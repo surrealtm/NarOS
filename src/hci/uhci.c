@@ -132,6 +132,14 @@ UHCI_Port_Status read_port_status(const UHCI_Controller *controller, const u32 p
     return (UHCI_Port_Status) port_read_u16(controller->ports[port_idx].register_address);
 }
 
+static
+b8 is_port_enabled(const UHCI_Controller *controller, const u8 port_idx) {
+    if(port_idx >= UHCI_PORT_CAPACITY) return false;
+    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
+    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended);
+}
+
+
 // ---------------------------------------------------------------------------------------------------------------
 // Endpoint Handling
 // ---------------------------------------------------------------------------------------------------------------
@@ -357,7 +365,14 @@ HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
     return (HCI_Controller) {
         uhci,
         (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Get_Port_Speed) uhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,
+        (HCI_Configure_Device) uhci_configure_device,
+        (HCI_Configure_Endpoint_Direction) uhci_configure_endpoint_direction,
+        (HCI_Control_Read) uhci_control_read,
+        (HCI_Control_Write) uhci_control_write,
+        (HCI_Bulk_Read) uhci_bulk_read,
+        (HCI_Bulk_Write) uhci_bulk_write,
     };
 }
 
@@ -414,18 +429,6 @@ UHCI_Device_Speed uhci_get_port_speed(const UHCI_Controller *controller, const u
     return speed;
 }
 
-b8 uhci_is_port_connected(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx >= UHCI_PORT_CAPACITY) return false;
-    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !(current_status & UHCI_PORT_STATUS_Suspended);
-}
-
-b8 uhci_is_port_enabled(const UHCI_Controller *controller, const u8 port_idx) {
-    if(port_idx >= UHCI_PORT_CAPACITY) return false;
-    const UHCI_Port_Status current_status = read_port_status(controller, port_idx);
-    return !!(current_status & UHCI_PORT_STATUS_Currently_Connected) && !!(current_status & UHCI_PORT_STATUS_Currently_Enabled) && !(current_status & UHCI_PORT_STATUS_Suspended);
-}
-
 b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
     if(port_idx >= UHCI_PORT_CAPACITY) return false;
 
@@ -452,7 +455,7 @@ b8 uhci_reset_and_enable_port(UHCI_Controller *controller, const u8 port_idx) {
     {
         // Wait for a valid startup for this port
         for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-            if(uhci_is_port_enabled(controller, port_idx)) {
+            if(is_port_enabled(controller, port_idx)) {
                 return true;
             }
             os_ctrl_sleep(WAIT_TIME_NANOSECONDS);

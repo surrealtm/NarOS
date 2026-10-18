@@ -1,6 +1,5 @@
 #include "usb.h"
 #include "usb/scsi.h"
-#include "hci/uhci.h"
 
 #include "output.h" // @Temporary: Only for printing the file content
 
@@ -154,7 +153,7 @@ USB_Request_Header request_header(const USB_Request_Direction direction, const U
 }
 
 static
-b8 configure_host_endpoints(USB_Device *device, UHCI_Controller *controller, const u8 port_idx) {
+b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
     const u8 device_idx = 0;
     const u8 endpoint_idx = 0;
     const u8 initial_length = 8; // The first request is limited to 8 bytes. With that information we can configure the HCI, and afterwards do arbitrary reads
@@ -169,11 +168,11 @@ b8 configure_host_endpoints(USB_Device *device, UHCI_Controller *controller, con
         .length = initial_length,
     };
 
-    if(!uhci_configure_device(controller, device_idx, uhci_get_port_speed(controller, port_idx))) {
+    if(!hci_configure_device(&device->hci, device_idx, hci_get_port_speed(&device->hci, port_idx))) {
         return false;
     }
 
-    if(uhci_control_read(controller, device_idx, &get_descriptor, sizeof(get_descriptor), &descriptor, initial_length) != initial_length) {
+    if(hci_control_read(&device->hci, device_idx, &get_descriptor, sizeof(get_descriptor), &descriptor, initial_length) != initial_length) {
         return false;
     }
 
@@ -183,16 +182,16 @@ b8 configure_host_endpoints(USB_Device *device, UHCI_Controller *controller, con
         .value = device->address,
     };
 
-    if(uhci_control_write(controller, device_idx, &set_address, sizeof(set_address), null, 0) != 0) {
+    if(hci_control_write(&device->hci, device_idx, &set_address, sizeof(set_address), null, 0) != 0) {
         return false;
     }
 
-    if(!uhci_configure_device(controller, device->address, uhci_get_port_speed(controller, port_idx))) {
+    if(!hci_configure_device(&device->hci, device->address, hci_get_port_speed(&device->hci, port_idx))) {
         return false;
     }
 
-    if(!uhci_configure_endpoint_direction(controller, device->address, endpoint_idx, UHCI_DIRECTION_In, descriptor.maximum_packet_size_0) ||
-        !uhci_configure_endpoint_direction(controller, device->address, endpoint_idx, UHCI_DIRECTION_Out, descriptor.maximum_packet_size_0)) {
+    if(!hci_configure_endpoint_direction(&device->hci, device->address, endpoint_idx, HCI_DIRECTION_In, descriptor.maximum_packet_size_0) ||
+        !hci_configure_endpoint_direction(&device->hci, device->address, endpoint_idx, HCI_DIRECTION_Out, descriptor.maximum_packet_size_0)) {
         return false;
     }
 
@@ -248,7 +247,7 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
 }
 
 static
-b8 configure_device(USB_Device *device, UHCI_Controller *controller) {
+b8 configure_device(USB_Device *device) {
     USB_Configuration_Descriptor configuration_descriptor = { 0 };
     u8 payload[CONFIGURATION_PAYLOAD_CAPACITY] = { 0 };
 
@@ -263,7 +262,7 @@ b8 configure_device(USB_Device *device, UHCI_Controller *controller) {
         .length  = sizeof(configuration_descriptor),
     };
 
-    if(uhci_control_read(controller, device->address, &get_header, sizeof(get_header), &configuration_descriptor, sizeof(configuration_descriptor)) != sizeof(configuration_descriptor)) {
+    if(hci_control_read(&device->hci, device->address, &get_header, sizeof(get_header), &configuration_descriptor, sizeof(configuration_descriptor)) != sizeof(configuration_descriptor)) {
         return false;
     }
 
@@ -282,7 +281,7 @@ b8 configure_device(USB_Device *device, UHCI_Controller *controller) {
         .length  = configuration_descriptor.total_length,
     };
 
-    if(uhci_control_read(controller, device->address, &get_payload, sizeof(get_payload), payload, configuration_descriptor.total_length) != configuration_descriptor.total_length) {
+    if(hci_control_read(&device->hci, device->address, &get_payload, sizeof(get_payload), payload, configuration_descriptor.total_length) != configuration_descriptor.total_length) {
         return false;
     }
 
@@ -302,12 +301,12 @@ b8 configure_device(USB_Device *device, UHCI_Controller *controller) {
         .value = device->configuration_value,
     };
 
-    if(uhci_control_write(controller, device->address, &set_configuration, sizeof(set_configuration), null, 0) != 0) {
+    if(hci_control_write(&device->hci, device->address, &set_configuration, sizeof(set_configuration), null, 0) != 0) {
         return false;
     }
 
-    if(!uhci_configure_endpoint_direction(controller, device->address, device->bulk_in_endpoint, UHCI_DIRECTION_In, device->bulk_in_packet_size) ||
-        !uhci_configure_endpoint_direction(controller, device->address, device->bulk_out_endpoint, UHCI_DIRECTION_Out, device->bulk_out_packet_size)) {
+    if(!hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_in_endpoint, HCI_DIRECTION_In, device->bulk_in_packet_size) ||
+        !hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_out_endpoint, HCI_DIRECTION_Out, device->bulk_out_packet_size)) {
         return false;
     }
 
@@ -324,33 +323,34 @@ USB_Device *usb_allocate_device(void) {
     return device;
 }
 
-b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const u8 port_idx) {
+b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_idx) {
     *device = (USB_Device) {
+        .hci               = hci,
         .address           = port_idx + 1,
         .bulk_in_endpoint  = INVALID_ENDPOINT,
         .bulk_out_endpoint = INVALID_ENDPOINT,
     };
 
-    if(!configure_host_endpoints(device, controller, port_idx)) {
+    if(!configure_host_endpoints(device, port_idx)) {
         return false;
     }
 
-    if(!configure_device(device, controller)) {
+    if(!configure_device(device)) {
         return false;
     }
 
     SCSI_Inquiry inquiry = { 0 };
-    if(!scsi_inquire(device, controller, &inquiry)) {
+    if(!scsi_inquire(device, &inquiry)) {
         return false;
     }
 
     SCSI_Read_Capacity capacity = { 0 };
-    if(!scsi_read_capacity(device, controller, &capacity)) {
+    if(!scsi_read_capacity(device, &capacity)) {
         return false;
     }
 
     char buffer[capacity.block_size_in_bytes];
-    if(!scsi_read(device, controller, 0, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
+    if(!scsi_read(device, 0, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
         return false;
     }
 
@@ -358,7 +358,7 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
 
     const char *text = "Hello from the kernel";
     move_memory(buffer, text, cstring_length(text));
-    if(!scsi_write(device, controller, 1, 1, buffer)) {
+    if(!scsi_write(device, 1, 1, buffer)) {
         return false;
     }
 

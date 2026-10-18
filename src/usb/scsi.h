@@ -2,7 +2,6 @@
 
 #include "base.h"
 
-struct UHCI_Controller;
 struct USB_Device;
 
 typedef struct SCSI_Inquiry {
@@ -41,20 +40,20 @@ typedef struct SCSI_Read_Capacity {
  * Fills in the result structure with metadata about the USB mass storage device.
  * Returns false on hardware failure.
  */
-b8 scsi_inquire(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Inquiry *result);
+b8 scsi_inquire(const struct USB_Device *device, SCSI_Inquiry *result);
 
 /**
  * Fills in the read capacity into the result structure.
  * Returns false on hardware failure.
  */
-b8 scsi_read_capacity(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Read_Capacity *result);
+b8 scsi_read_capacity(const struct USB_Device *device, SCSI_Read_Capacity *result);
 
 /**
  * Reads the specified number of block segments into the data pointer, starting at the specified block address.
  * The data pointer is expected to hold `block_count * block_size_in_bytes` number of bytes.
  * Returns false if not all bytes could be read.
  */
-b8 scsi_read(const struct USB_Device *device, struct UHCI_Controller *controller, u32 logical_block_address, u16 block_count, void *data);
+b8 scsi_read(const struct USB_Device *device, u32 logical_block_address, u16 block_count, void *data);
 
 /**
  * Writes the specified number of block segments from the data pointer onto the mass storage device, starting at the specified
@@ -62,4 +61,4 @@ b8 scsi_read(const struct USB_Device *device, struct UHCI_Controller *controller
  * The data pointer is expected to hold `block_count * block_size_in_bytes` number of bytes.
  * Returns false if not all bytes could be written.
  */
-b8 scsi_write(const struct USB_Device *device, struct UHCI_Controller *controller, u32 logical_block_address, u16 block_count, const void *data);
+b8 scsi_write(const struct USB_Device *device, u32 logical_block_address, u16 block_count, const void *data);

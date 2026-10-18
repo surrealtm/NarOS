@@ -1,10 +1,10 @@
 #pragma once
 
 #include "base.h"
-
-struct UHCI_Controller;
+#include "hci/hci.h"
 
 typedef struct USB_Device {
+    HCI_Controller hci;
     u8 address;
     u8 configuration_value;
     u8 mass_storage_interface;
@@ -23,4 +23,4 @@ USB_Device *usb_allocate_device(void);
  * Initializes a new USB device for the given interface and port idx.
  * Returns true if the hardware device was successfully configured for the USB protocol
  */
-b8 usb_initialize_device(USB_Device *device, struct UHCI_Controller *uhci, u8 port_idx);
+b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, u8 port_idx);

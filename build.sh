@@ -159,6 +159,7 @@ KERNEL_C_SOURCE_FILES=(
     "ctrl/ctrl.c"
     "display/display.c"
     "entry_point/entry_point.c"
+    "hci/hci.c"
     "hci/uhci.c"
     "input/input.c"
     "interrupt/interrupt.c"
