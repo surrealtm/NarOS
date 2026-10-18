@@ -32,7 +32,8 @@ typedef enum Serial_Bus_Controller_Subclass {
 } Serial_Bus_Controller_Subclass;
 
 typedef enum Serial_Bus_USB_Controller_Program_Interface {
-    SERIAL_BUS_USB_CONTROLLER_UHCI = 0x0,
+    SERIAL_BUS_USB_CONTROLLER_UHCI = 0x00,
+    SERIAL_BUS_USB_CONTROLLER_XHCI = 0x30,
 } Serial_Bus_USB_Controller_Program_Interface;
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -86,7 +87,7 @@ void initialize_usb_devices(const HCI_Controller controller, const u32 pci_addre
 
 static
 void initialize_mass_storage_device(const PCI_Device device) {
-    switch(device.subclass) {
+    switch((Mass_Storage_Device_Subclass) device.subclass) {
         case MASS_STORAGE_DEVICE_IDE_Controller:
             break;
     }
@@ -94,7 +95,7 @@ void initialize_mass_storage_device(const PCI_Device device) {
 
 static
 void initialize_serial_bus_usb_controller(const PCI_Device device) {
-    switch(device.interface) {
+    switch((Serial_Bus_USB_Controller_Program_Interface) device.interface) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
             const u32 pci_address = get_bar_address(device, UHCI_IOBAR_OFFSET);
             UHCI_Controller *uhci = uhci_allocate_controller();
@@ -104,12 +105,16 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
                 }
             }
         } break;
+
+        case SERIAL_BUS_USB_CONTROLLER_XHCI: {
+            os_output_print(str8("Discovered an XHCI usb.\n"));
+        } break;
     }
 }
 
 static
 void initialize_serial_bus_controller(const PCI_Device device) {
-    switch(device.subclass) {
+    switch((Serial_Bus_Controller_Subclass) device.subclass) {
         case SERIAL_BUS_CONTROLLER_USB:
             initialize_serial_bus_usb_controller(device);
             break;
@@ -118,7 +123,7 @@ void initialize_serial_bus_controller(const PCI_Device device) {
 
 static
 void initialize_device(const PCI_Device device) {
-    switch(device.class_code) {
+    switch((Class_Code) device.class_code) {
         case CLASS_Serial_Bus_Controller:
             initialize_serial_bus_controller(device);
             break;
