@@ -356,9 +356,9 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
 
     os_output_print(str8(buffer));
 
-    const char *text = "Hello from the kernel";
+    const char *text = "Hello from the kernel, this is some text written from the usb layer.";
     move_memory(buffer, text, cstring_length(text));
-    if(!scsi_write(device, 1, 1, buffer)) {
+    if(!scsi_write(device, 1, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
         return false;
     }
 

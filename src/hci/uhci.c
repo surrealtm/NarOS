@@ -34,6 +34,8 @@ b8 validate_device_speed(const HCI_Device_Speed speed) {
     switch(speed) {
         case HCI_DEVICE_SPEED_Low:   return true;
         case HCI_DEVICE_SPEED_Full:  return true;
+        case HCI_DEVICE_SPEED_High:  return false;
+        case HCI_DEVICE_SPEED_Super: return false;
         case HCI_DEVICE_SPEED_Error: return false;
     }
     return false;

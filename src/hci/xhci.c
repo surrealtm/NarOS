@@ -9,6 +9,7 @@
 #define XHCI_USBCMD_RUN_STOP (1u << 0)
 #define XHCI_USBCMD_HOST_CONTROLLER_RESET (1u << 1)
 #define XHCI_USBSTS_HALTED (1u << 0)
+#define XHCI_USBSTS_CONTROLLER_NOT_READY (1u << 11)
 #define XHCI_PORTSC_CONNECT_STATUS (1u << 0)
 #define XHCI_PORTSC_PORT_ENABLED (1u << 1)
 #define XHCI_PORTSC_PORT_RESET (1u << 4)
@@ -28,6 +29,7 @@
 #define XHCI_TRB_TYPE_ENABLE_SLOT_COMMAND 9
 #define XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND 11
 #define XHCI_TRB_TYPE_CONFIGURE_ENDPOINT_COMMAND 12
+#define XHCI_TRB_TYPE_EVALUATE_CONTEXT_COMMAND 13
 #define XHCI_TRB_TYPE_COMMAND_COMPLETION_EVENT 33
 #define XHCI_TRB_TYPE_TRANSFER_EVENT 32
 
@@ -46,7 +48,12 @@ void mmio_write32(volatile void *address, const u32 value) {
 
 static inline
 void mmio_write64(volatile void *address, const u64 value) {
-    *(volatile u64 *)address = value;
+    /* xHCI 64-bit registers are programmed as two ordered 32-bit MMIO
+     * accesses.  A compiler-generated volatile u64 store is not required to
+     * use this order on a 32-bit target. */
+    volatile u8 *base = (volatile u8 *)address;
+    mmio_write32(base, (u32)value);
+    mmio_write32(base + sizeof(u32), (u32)(value >> 32));
 }
 
 static inline
@@ -107,6 +114,46 @@ b8 wait_for_halted(const XHCI_Controller *controller, const b8 halted) {
 }
 
 static
+b8 wait_for_controller_ready(const XHCI_Controller *controller) {
+    for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
+        if(!(mmio_read32(at(controller->operational_base, 0x04)) & XHCI_USBSTS_CONTROLLER_NOT_READY)) return true;
+        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+    }
+    return false;
+}
+
+/* Firmware is permitted to retain an xHCI controller until the OS-owned
+ * semaphore is set.  In particular, SeaBIOS can leave this capability
+ * present on QEMU's qemu-xhci device. */
+static
+b8 take_legacy_ownership(XHCI_Controller *controller, const u32 hccparams1) {
+    u32 capability_offset = ((hccparams1 >> 16) & 0xffff) << 2;
+
+    for(u32 capability_count = 0; capability_offset && capability_count < 64; ++capability_count) {
+        const u32 header = mmio_read32(at(controller->mmio_base, capability_offset));
+        const u8 capability_id = header & 0xff;
+        const u8 next_capability_offset = (header >> 8) & 0xff;
+
+        if(capability_id == 1) { /* USB Legacy Support extended capability */
+            /* The ownership semaphores share the extended-capability header
+             * dword.  The following dword is USBLEGSUP control/status, not
+             * the semaphore register. */
+            volatile u8 *legacy_support = at(controller->mmio_base, capability_offset);
+            mmio_write32(legacy_support, mmio_read32(legacy_support) | (1u << 24));
+            for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
+                if(!(mmio_read32(legacy_support) & (1u << 16))) return true;
+                os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+            }
+            return false;
+        }
+
+        capability_offset = (u32)next_capability_offset << 2;
+    }
+
+    return true;
+}
+
+static
 XHCI_TRB *context(XHCI_Controller *controller, const u8 device, const b8 input, const u8 index) {
     u8 *base = input ? &controller->input_contexts[device][0][0] : &controller->device_contexts[device][0][0];
     return (XHCI_TRB *)(base + (u32)index * controller->context_size);
@@ -114,16 +161,20 @@ XHCI_TRB *context(XHCI_Controller *controller, const u8 device, const b8 input, 
 
 static
 u8 endpoint_id(const u8 endpoint, const HCI_Direction direction) {
-    return endpoint == 0 ? 1 : (u8)(endpoint * 2 + (direction == HCI_DIRECTION_In ? 2 : 1));
+    return endpoint == 0 ? 1 : (u8)(endpoint * 2 + (direction == HCI_DIRECTION_In ? 1 : 0));
 }
 
 static
 b8 event_pop(XHCI_Controller *controller, XHCI_TRB *event) {
     XHCI_Ring *ring = &controller->event_ring;
-    XHCI_TRB *trb = &ring->trbs[ring->dequeue_index];
+    volatile XHCI_TRB *trb = &ring->trbs[ring->dequeue_index];
+    memory_barrier();
     if(((trb->control & XHCI_TRB_CYCLE) != 0) != ring->consumer_cycle) return false;
 
-    *event = *trb;
+    event->parameter_low = trb->parameter_low;
+    event->parameter_high = trb->parameter_high;
+    event->status = trb->status;
+    event->control = trb->control;
     ++ring->dequeue_index;
     if(ring->dequeue_index == XHCI_RING_CAPACITY) {
         ring->dequeue_index = 0;
@@ -174,6 +225,8 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     controller->doorbell_base = at(controller->mmio_base, dboff);
     controller->context_size = (hccparams1 & (1u << 2)) ? 64 : 32;
     controller->port_count = (hcsparams1 >> 24) & 0xff;
+    if(!take_legacy_ownership(controller, hccparams1)) return false;
+    if(!wait_for_controller_ready(controller)) return false;
 
     mmio_write32(at(controller->operational_base, 0x00), 0);
     if(!wait_for_halted(controller, true)) return false;
@@ -183,6 +236,7 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
         if(i + 1 == WAIT_MAX_RETRIES) return false;
     }
+    if(!wait_for_controller_ready(controller)) return false;
 
     ring_initialize(&controller->command_ring);
     event_ring_initialize(&controller->event_ring);
@@ -210,7 +264,13 @@ HCI_Device_Speed xhci_get_port_speed(const XHCI_Controller *controller, const u8
     if(port_idx >= controller->port_count) return HCI_DEVICE_SPEED_Error;
 
     const u32 portsc = mmio_read32(at(controller->operational_base, 0x400 + port_idx * 0x10));
-    return ((portsc >> 10) & 0xf) == 2 ? HCI_DEVICE_SPEED_Low : HCI_DEVICE_SPEED_Full;
+    switch((portsc >> 10) & 0xf) {
+        case 1: return HCI_DEVICE_SPEED_Full;
+        case 2: return HCI_DEVICE_SPEED_Low;
+        case 3: return HCI_DEVICE_SPEED_High;
+        case 4: return HCI_DEVICE_SPEED_Super;
+        default: return HCI_DEVICE_SPEED_Error;
+    }
 }
 
 static
@@ -242,10 +302,12 @@ void initialize_endpoint_context(XHCI_Controller *controller, const u8 device, c
     ring_initialize(ring);
 
     XHCI_TRB *endpoint = context(controller, device, true, id + 1);
-    endpoint->parameter_low = PHYSICAL_ADDRESS(ring->trbs) | 1;
-    endpoint->parameter_high = 0;
-    endpoint->status = ((u32)maximum_packet_size << 16) | 3;
-    endpoint->control = (id == 1 ? 4u : 3u) << 3; /* control endpoint, otherwise bulk */
+    /* Endpoint Context: DW1 holds packet size, error count and type;
+     * DW2/DW3 hold the transfer-ring dequeue pointer and cycle state. */
+    endpoint->parameter_high = ((u32)maximum_packet_size << 16) |
+        ((id == 1 ? 4u : (id & 1 ? 7u : 3u)) << 3) | (3u << 1);
+    endpoint->status = PHYSICAL_ADDRESS(ring->trbs) | 1;
+    endpoint->control = 0;
 }
 
 static
@@ -262,26 +324,27 @@ b8 xhci_configure_device(XHCI_Controller *controller, const u8 device_idx, const
         controller->slot_for_device[0] = slot;
 
         XHCI_TRB *control = context(controller, 0, true, 0);
-        control->control = (1u << 1) | (1u << 0); /* add slot and EP0 contexts */
+        control->parameter_high = (1u << 1) | (1u << 0); /* add slot and EP0 contexts */
 
         XHCI_TRB *slot_context = context(controller, 0, true, 1);
-        slot_context->status = ((u32)(speed == HCI_DEVICE_SPEED_Low ? 2 : 1) << 20) | ((u32)(controller->current_port + 1) << 16);
-        slot_context->control = 1u << 27; /* context entries = EP0 */
+        const u32 speed_code = speed == HCI_DEVICE_SPEED_Low ? 2 :
+            speed == HCI_DEVICE_SPEED_High ? 3 : speed == HCI_DEVICE_SPEED_Super ? 4 : 1;
+        slot_context->parameter_low = (speed_code << 20) | (1u << 27);
+        slot_context->parameter_high = (u32)(controller->current_port + 1) << 16;
 
-        initialize_endpoint_context(controller, 0, 1, 8);
+        const u16 ep0_packet_size = speed == HCI_DEVICE_SPEED_Super ? 512 : speed == HCI_DEVICE_SPEED_High ? 64 : 8;
+        initialize_endpoint_context(controller, 0, 1, ep0_packet_size);
+        controller->maximum_packet_size[0][1] = ep0_packet_size;
 
         controller->dcbaa[slot] = PHYSICAL_ADDRESS(controller->device_contexts[0]);
         memory_barrier();
 
-        return submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[0]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND) | (1u << 9) | ((u32)slot << 24) }, null);
+        return submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[0]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND) | ((u32)slot << 24) }, null);
     } else {
         if(!controller->slot_for_device[0]) return false;
 
         controller->slot_for_device[device_idx] = controller->slot_for_device[0];
-
-        // Address Device assigns the xHCI slot's USB address.  The current USB
-        // layer uses port 0 first, for which its address and QEMU's first slot agree.
-        return submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[0]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND) | ((u32)controller->slot_for_device[device_idx] << 24) }, null);
+        return true;
     }
 }
 
@@ -290,20 +353,35 @@ b8 xhci_configure_endpoint_direction(XHCI_Controller *controller, const u8 devic
     if(device_idx >= XHCI_DEVICE_CAPACITY || endpoint >= 16 || direction >= HCI_DIRECTION_COUNT || maximum_packet_size == 0 || !controller->slot_for_device[device_idx]) return false;
 
     const u8 id = endpoint_id(endpoint, direction);
-    controller->maximum_packet_size[device_idx][id] = maximum_packet_size;
+    const u8 context_idx = 0; /* The USB layer changes the address of this one device. */
     if(endpoint == 0) {
-        initialize_endpoint_context(controller, device_idx, id, maximum_packet_size);
+        /* SuperSpeed bMaxPacketSize0 is an exponent.  Keep the live EP0 ring
+         * while updating the packet size in the input context. */
+        const b8 superspeed = xhci_get_port_speed(controller, controller->current_port) == HCI_DEVICE_SPEED_Super;
+        if(superspeed && maximum_packet_size != 9) return false;
+        const u16 packet_size = superspeed ? (u16)(1u << maximum_packet_size) : maximum_packet_size;
+        if(controller->maximum_packet_size[context_idx][1] == packet_size) return true;
+
+        XHCI_TRB *input_control = context(controller, context_idx, true, 0);
+        input_control->parameter_high = 1u << 1;
+        XHCI_TRB *ep0_context = context(controller, context_idx, true, 2);
+        ep0_context->parameter_high = (ep0_context->parameter_high & 0xffffu) | ((u32)packet_size << 16);
+        memory_barrier();
+        if(!submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[context_idx]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_EVALUATE_CONTEXT_COMMAND) | ((u32)controller->slot_for_device[device_idx] << 24) }, null)) return false;
+        controller->maximum_packet_size[context_idx][1] = packet_size;
         return true;
     }
 
-    XHCI_TRB *control = context(controller, device_idx, true, 0);
-    control->control = (1u << id) | (1u << 1);
-    XHCI_TRB *slot_context = context(controller, device_idx, true, 1);
-    slot_context->control = (u32)id << 27;
-    initialize_endpoint_context(controller, device_idx, id, maximum_packet_size);
+    XHCI_TRB *control = context(controller, context_idx, true, 0);
+    control->parameter_high = (1u << id) | 1u; /* add endpoint and slot contexts */
+    XHCI_TRB *slot_context = context(controller, context_idx, true, 1);
+    slot_context->parameter_low = (slot_context->parameter_low & ~(31u << 27)) | ((u32)id << 27);
+    initialize_endpoint_context(controller, context_idx, id, maximum_packet_size);
     memory_barrier();
 
-    return submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[device_idx]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_CONFIGURE_ENDPOINT_COMMAND) | ((u32)controller->slot_for_device[device_idx] << 24) }, null);
+    if(!submit_command(controller, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(controller->input_contexts[context_idx]), .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_CONFIGURE_ENDPOINT_COMMAND) | ((u32)controller->slot_for_device[device_idx] << 24) }, null)) return false;
+    controller->maximum_packet_size[context_idx][id] = maximum_packet_size;
+    return true;
 }
 
 static
@@ -323,7 +401,11 @@ static
 s32 xhci_control(XHCI_Controller *controller, const u8 device, const HCI_Direction direction, const void *header, const u32 header_size, void *payload, const u32 payload_size) {
     if(device >= XHCI_DEVICE_CAPACITY || !header || header_size != 8 || (payload_size && !payload)) return XHCI_ERROR;
 
-    XHCI_Ring *ring = &controller->transfer_rings[device][1];
+    /* Address Device already sends SET_ADDRESS through the controller. */
+    const u8 *setup_bytes = header;
+    if(direction == HCI_DIRECTION_Out && setup_bytes[0] == 0 && setup_bytes[1] == 5 && payload_size == 0) return 0;
+
+    XHCI_Ring *ring = &controller->transfer_rings[0][1];
     u64 setup = 0;
     move_memory(&setup, header, 8);
 
@@ -343,7 +425,7 @@ s32 xhci_bulk(XHCI_Controller *controller, const u8 device, const u8 endpoint, c
     if(device >= XHCI_DEVICE_CAPACITY || endpoint == 0 || endpoint >= 16) return XHCI_ERROR;
 
     const u8 id = endpoint_id(endpoint, direction);
-    XHCI_Ring *ring = &controller->transfer_rings[device][id];
+    XHCI_Ring *ring = &controller->transfer_rings[0][id];
     XHCI_TRB *last = ring_push(ring, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(data), .status = size, .control = XHCI_TRB_TYPE(XHCI_TRB_TYPE_NORMAL) | XHCI_TRB_IOC });
 
     const s32 residual = submit_transfer(controller, device, id, last);
