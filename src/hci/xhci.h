@@ -3,9 +3,6 @@
 #include "base.h"
 #include "hci.h"
 
-/* The driver deliberately keeps a small, statically allocated set of slots.
- * The rest of the kernel currently enumerates one USB device at a time. */
-#define XHCI_MAX_CONTROLLERS 1
 #define XHCI_DEVICE_CAPACITY 8
 #define XHCI_ENDPOINT_CAPACITY 32
 #define XHCI_RING_CAPACITY 64
@@ -41,13 +38,14 @@ typedef struct XHCI_Controller {
     u8 port_count;
     u8 current_port;
     u8 slot_for_device[XHCI_DEVICE_CAPACITY];
-    u16 maximum_packet_size[XHCI_DEVICE_CAPACITY][XHCI_ENDPOINT_CAPACITY];
+    /* This driver currently manages one attached device per controller. */
+    u16 maximum_packet_size[XHCI_ENDPOINT_CAPACITY];
     u64 dcbaa[256] ALIGN_DECLARATION(64);
-    u8 device_contexts[XHCI_DEVICE_CAPACITY][XHCI_ENDPOINT_CAPACITY][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
-    u8 input_contexts[XHCI_DEVICE_CAPACITY][XHCI_ENDPOINT_CAPACITY + 1][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
+    u8 device_contexts[XHCI_ENDPOINT_CAPACITY][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
+    u8 input_contexts[XHCI_ENDPOINT_CAPACITY + 1][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
     XHCI_Ring command_ring;
     XHCI_Ring event_ring;
-    XHCI_Ring transfer_rings[XHCI_DEVICE_CAPACITY][XHCI_ENDPOINT_CAPACITY];
+    XHCI_Ring transfer_rings[XHCI_ENDPOINT_CAPACITY];
     XHCI_ERST_Entry event_ring_segment_table ALIGN_DECLARATION(64);
 } XHCI_Controller;
 

@@ -37,3 +37,7 @@ SECTIONS {
         __bss_end = .;
     } :data
 }
+
+/* Low memory from 0xa0000 onward contains VGA and firmware mappings.  The
+ * boot loader puts the stack at 0x90000; reserve at least 64 KiB below it. */
+ASSERT(__bss_end <= 0x80000, "Kernel data overlaps the early stack or VGA memory");

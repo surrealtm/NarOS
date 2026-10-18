@@ -5,7 +5,7 @@
 
 #define INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
-#define USB_MAX_DEVICES 1
+#define USB_MAX_DEVICES 8
 
 typedef enum USB_Descriptor_Type {
     USB_DESCRIPTOR_TYPE_Device = 0x1,
@@ -339,6 +339,7 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
         return false;
     }
 
+/*
     SCSI_Inquiry inquiry = { 0 };
     if(!scsi_inquire(device, &inquiry)) {
         return false;
@@ -354,6 +355,7 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
         return false;
     }
 
+    os_output_print(str8("Read the following data from the device:\n"));
     os_output_print(str8(buffer));
 
     const char *text = "Hello from the kernel, this is some text written from the usb layer.";
@@ -361,6 +363,9 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
     if(!scsi_write(device, 1, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
         return false;
     }
+*/
+
+    os_output_print(str8("Successfully initialized USB device.\n"));
 
     return true;
 }

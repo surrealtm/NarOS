@@ -138,7 +138,7 @@ invoke_kernel:
     mov fs, ax
     mov gs, ax
 .call_kernel_entry_point:
-    mov ebp, 0x90000 ; Set up the stack pointer
+    mov ebp, 0x90000 ; Set up the stack pointer below the VGA/firmware aperture
     mov esp, ebp
     ; Set up the Boot_Loader_Info struct on the stack. Careful: The `kernel_main` function needs to copy this struct!
     mov al, [BOOT_DRIVE]
