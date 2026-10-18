@@ -343,5 +343,11 @@ b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const 
 
     os_output_print(str8(buffer));
 
+    const char *text = "Hello from the kernel";
+    move_memory(buffer, text, cstring_length(text));
+    if(!scsi_write(device, controller, 1, 1, buffer)) {
+        return false;
+    }
+
     return true;
 }

@@ -45,3 +45,4 @@ typedef struct SCSI_Read {
 b8 scsi_inquire(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Inquiry *result);
 b8 scsi_read_capacity(const struct USB_Device *device, struct UHCI_Controller *controller, SCSI_Read_Capacity *result);
 b8 scsi_read(const struct USB_Device *device, struct UHCI_Controller *controller, u32 logical_block_address, SCSI_Read *result);
+b8 scsi_write(const struct USB_Device *device, struct UHCI_Controller *controller, u32 logical_block_address, u16 block_count, const void *data);
