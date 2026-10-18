@@ -146,6 +146,7 @@ typedef struct USB_Endpoint_Descriptor {
 
 static USB_Device usb_devices[USB_MAX_DEVICES];
 static u32 usb_device_count = 0;
+static u8 storage_probe_block[4096] ALIGN_DECLARATION(4096);
 
 static
 USB_Request_Header request_header(const USB_Request_Direction direction, const USB_Request_Type type, const USB_Request_Recipient recipient) {
@@ -159,6 +160,11 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
     const u8 initial_length = 8; // The first request is limited to 8 bytes. With that information we can configure the HCI, and afterwards do arbitrary reads
 
     USB_Device_Descriptor descriptor = { 0 };
+    const HCI_Device_Speed speed = hci_get_port_speed(&device->hci, port_idx);
+    if(speed == HCI_DEVICE_SPEED_Error) {
+        os_output_print(str8("USB: unsupported port speed.\n"));
+        return false;
+    }
 
     USB_Request_Packet get_descriptor = {
         .header = request_header(USB_REQUEST_DIRECTION_Device_To_Host, USB_REQUEST_TYPE_Standard, USB_REQUEST_RECIPIENT_Device),
@@ -168,11 +174,13 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
         .length = initial_length,
     };
 
-    if(!hci_configure_device(&device->hci, device_idx, hci_get_port_speed(&device->hci, port_idx))) {
+    if(!hci_configure_device(&device->hci, device_idx, speed)) {
+        os_output_print(str8("USB: initial host address setup failed.\n"));
         return false;
     }
 
     if(hci_control_read(&device->hci, device_idx, &get_descriptor, sizeof(get_descriptor), &descriptor, initial_length) != initial_length) {
+        os_output_print(str8("USB: first device descriptor read failed.\n"));
         return false;
     }
 
@@ -183,15 +191,18 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
     };
 
     if(hci_control_write(&device->hci, device_idx, &set_address, sizeof(set_address), null, 0) != 0) {
+        os_output_print(str8("USB: set address failed.\n"));
         return false;
     }
 
-    if(!hci_configure_device(&device->hci, device->address, hci_get_port_speed(&device->hci, port_idx))) {
+    if(!hci_configure_device(&device->hci, device->address, speed)) {
+        os_output_print(str8("USB: assigned host address setup failed.\n"));
         return false;
     }
 
     if(!hci_configure_endpoint_direction(&device->hci, device->address, endpoint_idx, HCI_DIRECTION_In, descriptor.maximum_packet_size_0) ||
         !hci_configure_endpoint_direction(&device->hci, device->address, endpoint_idx, HCI_DIRECTION_Out, descriptor.maximum_packet_size_0)) {
+        os_output_print(str8("USB: control packet size setup failed.\n"));
         return false;
     }
 
@@ -207,6 +218,7 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
 
     for(u16 payload_offset_in_bytes = 0; payload_offset_in_bytes + sizeof(USB_Descriptor_Header) <= payload_size_in_bytes;) {
         const USB_Descriptor_Header *header = (USB_Descriptor_Header *) (&payload[payload_offset_in_bytes]);
+        if(header->length < sizeof(*header) || header->length > payload_size_in_bytes - payload_offset_in_bytes) return false;
         payload_offset_in_bytes += header->length;
 
         switch(header->descriptor_type) {
@@ -263,10 +275,12 @@ b8 configure_device(USB_Device *device) {
     };
 
     if(hci_control_read(&device->hci, device->address, &get_header, sizeof(get_header), &configuration_descriptor, sizeof(configuration_descriptor)) != sizeof(configuration_descriptor)) {
+        os_output_print(str8("USB: configuration header read failed.\n"));
         return false;
     }
 
     if(configuration_descriptor.header.length != sizeof(configuration_descriptor) || configuration_descriptor.header.descriptor_type != USB_DESCRIPTOR_TYPE_Configuration || configuration_descriptor.total_length < sizeof(configuration_descriptor) || configuration_descriptor.total_length > sizeof(payload)) {
+        os_output_print(str8("USB: invalid configuration descriptor.\n"));
         return false;
     }
 
@@ -282,6 +296,7 @@ b8 configure_device(USB_Device *device) {
     };
 
     if(hci_control_read(&device->hci, device->address, &get_payload, sizeof(get_payload), payload, configuration_descriptor.total_length) != configuration_descriptor.total_length) {
+        os_output_print(str8("USB: configuration payload read failed.\n"));
         return false;
     }
 
@@ -289,6 +304,7 @@ b8 configure_device(USB_Device *device) {
     // Parse the endpoint configuration for this device
     //
     if(!parse_configuration_payload(device, payload, configuration_descriptor.total_length)) {
+        os_output_print(str8("USB: no supported mass-storage interface.\n"));
         return false;
     }
 
@@ -302,11 +318,13 @@ b8 configure_device(USB_Device *device) {
     };
 
     if(hci_control_write(&device->hci, device->address, &set_configuration, sizeof(set_configuration), null, 0) != 0) {
+        os_output_print(str8("USB: set configuration failed.\n"));
         return false;
     }
 
     if(!hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_in_endpoint, HCI_DIRECTION_In, device->bulk_in_packet_size) ||
         !hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_out_endpoint, HCI_DIRECTION_Out, device->bulk_out_packet_size)) {
+        os_output_print(str8("USB: bulk endpoint setup failed.\n"));
         return false;
     }
 
@@ -321,6 +339,13 @@ USB_Device *usb_allocate_device(void) {
     USB_Device *device = &usb_devices[usb_device_count++];
     ZERO_STRUCT(device);
     return device;
+}
+
+void usb_discard_device(USB_Device *device) {
+    if(usb_device_count && device == &usb_devices[usb_device_count - 1]) {
+        ZERO_STRUCT(device);
+        --usb_device_count;
+    }
 }
 
 b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_idx) {
@@ -339,33 +364,33 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
         return false;
     }
 
-/*
     SCSI_Inquiry inquiry = { 0 };
     if(!scsi_inquire(device, &inquiry)) {
-        return false;
+        os_output_print(str8("USB mass-storage interface configured; SCSI inquiry failed.\n"));
+        return true;
     }
 
     SCSI_Read_Capacity capacity = { 0 };
     if(!scsi_read_capacity(device, &capacity)) {
-        return false;
+        os_output_print(str8("USB mass-storage interface configured; capacity read failed.\n"));
+        return true;
     }
 
-    char buffer[capacity.block_size_in_bytes];
-    if(!scsi_read(device, 0, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
-        return false;
+    if(capacity.block_size_in_bytes == 0 || capacity.block_size_in_bytes > sizeof(storage_probe_block)) {
+        os_output_print(str8("USB mass-storage interface configured; block size is unsupported.\n"));
+        return true;
     }
 
-    os_output_print(str8("Read the following data from the device:\n"));
-    os_output_print(str8(buffer));
-
-    const char *text = "Hello from the kernel, this is some text written from the usb layer.";
-    move_memory(buffer, text, cstring_length(text));
-    if(!scsi_write(device, 1, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
-        return false;
+    if(!scsi_read(device, 0, 1, storage_probe_block)) {
+        os_output_print(str8("USB mass-storage interface configured; first block read failed.\n"));
+        return true;
     }
-*/
 
-    os_output_print(str8("Successfully initialized USB device.\n"));
+    os_output_print(str8("USB storage ready: "));
+    os_output_print((Str8) { inquiry.vendor, sizeof(inquiry.vendor) });
+    os_output_print(str8(" "));
+    os_output_print((Str8) { inquiry.product, sizeof(inquiry.product) });
+    os_output_print(str8(" (first block read passed).\n"));
 
     return true;
 }

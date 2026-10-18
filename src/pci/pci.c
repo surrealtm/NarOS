@@ -11,10 +11,25 @@
 #define SLOT_COUNT     32
 #define FUNCTION_COUNT 8
 
-#define UHCI_IOBAR_NUMBER 0x4
+#define PCI_COMMAND_OFFSET 0x04
+#define PCI_COMMAND_IO_SPACE (1u << 0)
+#define PCI_COMMAND_MEMORY_SPACE (1u << 1)
+#define PCI_COMMAND_BUS_MASTER (1u << 2)
 #define UHCI_IOBAR_OFFSET 0x20
 #define XHCI_MEMORY_BAR_OFFSET 0x10
 
+static b8 supported_usb_controller_found;
+
+static
+void print_pci_location(const PCI_Device device) {
+    const char hexadecimal[] = "0123456789abcdef";
+    const char location[] = {
+        hexadecimal[device.bus >> 4], hexadecimal[device.bus & 0xf], ':',
+        hexadecimal[device.slot >> 4], hexadecimal[device.slot & 0xf], '.',
+        hexadecimal[device.function],
+    };
+    os_output_print((Str8) { location, sizeof(location) });
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 // PCI Types
@@ -59,13 +74,12 @@ b8 take_device_ownership(const PCI_Device device) {
 }
 
 static
-b8 enable_bus_master(const PCI_Device device) {
-    const u16 bus_master_mask = (1 << 2) | (1 << 1) | (1 << 0); // Enable bus master plus memory and IO decoding
-    const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER);
-    if((current_configuration & bus_master_mask) == bus_master_mask) return true; // Already set up
-    const u16 desired_configuration = current_configuration | bus_master_mask;
-    pci_write_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER, desired_configuration);
-    return (pci_read_u16(device.bus, device.slot, device.function, UHCI_IOBAR_NUMBER) & bus_master_mask) == bus_master_mask;
+b8 enable_bus_master(const PCI_Device device, const u16 address_space_bit) {
+    const u16 required_bits = PCI_COMMAND_BUS_MASTER | address_space_bit;
+    const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET);
+    if((current_configuration & required_bits) == required_bits) return true;
+    pci_write_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET, current_configuration | required_bits);
+    return (pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET) & required_bits) == required_bits;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -73,17 +87,41 @@ b8 enable_bus_master(const PCI_Device device) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-void initialize_usb_devices(const HCI_Controller controller, const u32 pci_address) {
+void initialize_usb_devices(const HCI_Controller controller, const u32 pci_address, const Str8 controller_name, const PCI_Device pci_device, const b8 stop_after_first_device) {
     if(!hci_initialize_controller(&controller, pci_address)) return;
 
     const s32 port_capacity = hci_get_port_capacity(&controller);
+    b8 enabled_port_found = false;
     for(u8 port_idx = 0; port_idx < port_capacity; ++port_idx) {
         if(hci_reset_and_enable_port(&controller, port_idx)) {
+            enabled_port_found = true;
+            const char hexadecimal[] = "0123456789abcdef";
+            const char port_number[] = { hexadecimal[(port_idx + 1) >> 4], hexadecimal[(port_idx + 1) & 0xf] };
+            os_output_print(str8("USB: "));
+            os_output_print(controller_name);
+            os_output_print(str8(" "));
+            print_pci_location(pci_device);
+            os_output_print(str8(" port 0x"));
+            os_output_print((Str8) { port_number, sizeof(port_number) });
+            os_output_print(str8(" connected.\n"));
             USB_Device *device = usb_allocate_device();
             if(device) {
-                usb_initialize_device(device, controller, port_idx);
+                if(usb_initialize_device(device, controller, port_idx)) {
+                    if(stop_after_first_device) return;
+                } else {
+                    usb_discard_device(device);
+                }
+            } else {
+                os_output_print(str8("USB: device capacity reached.\n"));
             }
         }
+    }
+    if(!enabled_port_found) {
+        os_output_print(str8("USB: "));
+        os_output_print(controller_name);
+        os_output_print(str8(" "));
+        print_pci_location(pci_device);
+        os_output_print(str8(": no enabled ports found.\n"));
     }
 }
 
@@ -99,21 +137,38 @@ static
 void initialize_serial_bus_usb_controller(const PCI_Device device) {
     switch((Serial_Bus_USB_Controller_Program_Interface) device.interface) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
+            supported_usb_controller_found = true;
             const u32 pci_address = get_bar_address(device, UHCI_IOBAR_OFFSET);
             UHCI_Controller *uhci = uhci_allocate_controller();
             if(uhci) {
-                if(take_device_ownership(device) && enable_bus_master(device)) {
-                    initialize_usb_devices(hci_controller_from_uhci(uhci), pci_address);
+                if(take_device_ownership(device) && enable_bus_master(device, PCI_COMMAND_IO_SPACE)) {
+                    initialize_usb_devices(hci_controller_from_uhci(uhci), pci_address, str8("UHCI"), device, false);
                 }
             }
         } break;
 
         case SERIAL_BUS_USB_CONTROLLER_XHCI: {
-            const u32 pci_address = get_bar_address(device, XHCI_MEMORY_BAR_OFFSET);
-            XHCI_Controller *xhci = xhci_allocate_controller();
-            if(xhci && enable_bus_master(device)) {
-                initialize_usb_devices(hci_controller_from_xhci(xhci), pci_address);
+            supported_usb_controller_found = true;
+            os_output_print(str8("xHCI controller found at PCI "));
+            print_pci_location(device);
+            os_output_print(str8(".\n"));
+            const u32 bar = pci_read_u32(device.bus, device.slot, device.function, XHCI_MEMORY_BAR_OFFSET);
+            if((bar & 1u) || !(bar & ~0xfu) || ((bar & 6u) == 4u && pci_read_u32(device.bus, device.slot, device.function, XHCI_MEMORY_BAR_OFFSET + 4) != 0)) {
+                os_output_print(str8("xHCI: unsupported MMIO address.\n"));
+                break;
             }
+            const u32 pci_address = bar & ~0xfu;
+            XHCI_Controller *xhci = xhci_allocate_controller();
+            if(!xhci) {
+                os_output_print(str8("xHCI: controller limit reached.\n"));
+                break;
+            }
+            if(!enable_bus_master(device, PCI_COMMAND_MEMORY_SPACE)) {
+                os_output_print(str8("xHCI: PCI bus mastering could not be enabled.\n"));
+                break;
+            }
+            /* This xHCI implementation has one device context per controller. */
+            initialize_usb_devices(hci_controller_from_xhci(xhci), pci_address, str8("xHCI"), device, true);
         } break;
     }
 }
@@ -168,6 +223,7 @@ u32 pci_read_u32(const u8 bus, const u8 slot, const u8 function, const u8 offset
 }
 
 void pci_initialize(void) {
+    supported_usb_controller_found = false;
     for(u16 bus = 0; bus < BUS_COUNT; ++bus) {
         for(u16 slot = 0; slot < SLOT_COUNT; ++slot) {
             for(u16 function = 0; function < FUNCTION_COUNT; ++function) {
@@ -187,4 +243,5 @@ void pci_initialize(void) {
             }
         }
     }
+    if(!supported_usb_controller_found) os_output_print(str8("USB: no supported host controller found.\n"));
 }

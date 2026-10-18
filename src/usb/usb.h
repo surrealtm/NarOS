@@ -18,6 +18,7 @@ typedef struct USB_Device {
  * Returns an uninitialized USB device structure, or null if the capacity for devices was reached
  */
 USB_Device *usb_allocate_device(void);
+void usb_discard_device(USB_Device *device);
 
 /**
  * Initializes a new USB device for the given interface and port idx.

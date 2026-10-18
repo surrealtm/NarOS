@@ -4,9 +4,11 @@
 #include "hci.h"
 
 #define XHCI_DEVICE_CAPACITY 8
+#define XHCI_USB_ADDRESS_CAPACITY 256
 #define XHCI_ENDPOINT_CAPACITY 32
 #define XHCI_RING_CAPACITY 64
 #define XHCI_CONTEXT_SIZE 64
+#define XHCI_SCRATCHPAD_CAPACITY 40
 
 typedef struct XHCI_TRB {
     u32 parameter_low;
@@ -37,10 +39,11 @@ typedef struct XHCI_Controller {
     u8 context_size;
     u8 port_count;
     u8 current_port;
-    u8 slot_for_device[XHCI_DEVICE_CAPACITY];
+    u8 slot_for_device[XHCI_USB_ADDRESS_CAPACITY];
     /* This driver currently manages one attached device per controller. */
     u16 maximum_packet_size[XHCI_ENDPOINT_CAPACITY];
     u64 dcbaa[256] ALIGN_DECLARATION(64);
+    u64 scratchpad_array[XHCI_SCRATCHPAD_CAPACITY] ALIGN_DECLARATION(64);
     u8 device_contexts[XHCI_ENDPOINT_CAPACITY][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
     u8 input_contexts[XHCI_ENDPOINT_CAPACITY + 1][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
     XHCI_Ring command_ring;
