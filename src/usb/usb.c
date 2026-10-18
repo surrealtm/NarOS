@@ -6,6 +6,7 @@
 
 #define INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
+#define USB_MAX_DEVICES 1
 
 typedef enum USB_Descriptor_Type {
     USB_DESCRIPTOR_TYPE_Device = 0x1,
@@ -143,6 +144,9 @@ typedef struct USB_Endpoint_Descriptor {
     u16 maximum_packet_size;
     u8 interval;
 } PACKED_STRUCT USB_Endpoint_Descriptor;
+
+static USB_Device usb_devices[USB_MAX_DEVICES];
+static u32 usb_device_count = 0;
 
 static
 USB_Request_Header request_header(const USB_Request_Direction direction, const USB_Request_Type type, const USB_Request_Recipient recipient) {
@@ -308,6 +312,16 @@ b8 configure_device(USB_Device *device, UHCI_Controller *controller) {
     }
 
     return true;
+}
+
+USB_Device *usb_allocate_device(void) {
+    if(usb_device_count >= USB_MAX_DEVICES) {
+        return null;
+    }
+
+    USB_Device *device = &usb_devices[usb_device_count++];
+    ZERO_STRUCT(device);
+    return device;
 }
 
 b8 usb_initialize_device(USB_Device *device, UHCI_Controller *controller, const u8 port_idx) {

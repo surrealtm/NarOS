@@ -149,6 +149,8 @@ typedef struct UHCI_Controller {
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 } UHCI_Controller;
 
+UHCI_Controller *uhci_allocate_controller(void);
+
 /**
  * Initializes the controller structure and configures the hardware controller at the given pci address.
  * Returns true if the hardware controller was successfully reset and enabled

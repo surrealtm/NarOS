@@ -13,44 +13,6 @@
 #define UHCI_IOBAR_NUMBER 0x4
 #define UHCI_IOBAR_OFFSET 0x20
 
-// ---------------------------------------------------------------------------------------------------------------
-// Connected Devices
-// ---------------------------------------------------------------------------------------------------------------
-
-#define MAX_UHCI_CONTROLLERS 1
-#define MAX_USB_DEVICES 1
-
-typedef struct Connected_Devices {
-    UHCI_Controller uhci[MAX_UHCI_CONTROLLERS];
-    u32 uhci_count;
-
-    USB_Device usb[MAX_USB_DEVICES];
-    u32 usb_count;
-} Connected_Devices;
-
-static Connected_Devices connected_devices = { 0 };
-
-static
-UHCI_Controller *allocate_uhci_controller(void) {
-    if(connected_devices.uhci_count >= MAX_UHCI_CONTROLLERS) {
-        return null;
-    }
-
-    UHCI_Controller *pointer = &connected_devices.uhci[connected_devices.uhci_count++];
-    set_memory(pointer, 0, sizeof(UHCI_Controller));
-    return pointer;
-}
-
-static
-USB_Device *allocate_usb_device(void) {
-    if(connected_devices.usb_count >= MAX_USB_DEVICES) {
-        return null;
-    }
-
-    USB_Device *pointer = &connected_devices.usb[connected_devices.usb_count++];
-    set_memory(pointer, 0, sizeof(USB_Device));
-    return pointer;
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // PCI Types
@@ -108,7 +70,7 @@ b8 enable_bus_master(const PCI_Device device) {
 
 static
 UHCI_Controller *initialize_uhci_controller(const PCI_Device device) {
-    UHCI_Controller *controller = allocate_uhci_controller();
+    UHCI_Controller *controller = uhci_allocate_controller();
     if(!controller) return null;
 
     take_device_ownership(device);
@@ -126,7 +88,7 @@ static
 void initialize_usb_devices(UHCI_Controller *controller) {
     for(u8 port_idx = 0; port_idx < UHCI_PORT_CAPACITY; ++port_idx) {
         if(uhci_reset_and_enable_port(controller, port_idx)) {
-            USB_Device *device = allocate_usb_device();
+            USB_Device *device = usb_allocate_device();
             if(device) {
                 if(usb_initialize_device(device, controller, port_idx)) {
                     os_output_print(str8("Successfully initialized a USB device.\n"));

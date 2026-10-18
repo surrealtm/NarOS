@@ -14,4 +14,5 @@ typedef struct USB_Device {
     u16 bulk_out_packet_size;
 } USB_Device;
 
+USB_Device *usb_allocate_device(void);
 b8 usb_initialize_device(USB_Device *device, struct UHCI_Controller *uhci, u8 port_idx);

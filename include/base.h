@@ -15,6 +15,8 @@
 #define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
 #define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
 
+#define ZERO_STRUCT(pointer) set_memory(pointer, 0, sizeof(*pointer))
+
 #define true 1
 #define false 0
 #define null 0

@@ -3,6 +3,8 @@
 #include "ctrl.h"
 #include "port/port.h"
 
+#define UHCI_MAX_CONTROLLERS 1
+
 #define WAIT_TIME_NANOSECONDS 1000000 // Wait in 1 millisecond intervals
 #define WAIT_MAX_RETRIES 100 // How many iterations in a wait-loop
 
@@ -14,6 +16,9 @@
 // the bit representation
 #define TRANSFER_DESCRIPTOR_ADDRESS(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
 #define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
+
+static UHCI_Controller uhci_controllers[UHCI_MAX_CONTROLLERS];
+static u32 uhci_controller_count = 0;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -347,6 +352,16 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 // ---------------------------------------------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
+
+UHCI_Controller *uhci_allocate_controller(void) {
+    if(uhci_controller_count >= UHCI_MAX_CONTROLLERS) {
+        return null;
+    }
+
+    UHCI_Controller *controller = &uhci_controllers[uhci_controller_count++];
+    ZERO_STRUCT(controller);
+    return controller;
+}
 
 b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
     controller->pci_address = pci_address;
