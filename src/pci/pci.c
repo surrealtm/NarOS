@@ -101,7 +101,7 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
     switch((Serial_Bus_USB_Controller_Program_Interface) device.interface) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
             const u32 pci_address = get_bar_address(device, UHCI_IOBAR_OFFSET);
-            UHCI_Controller *uhci = uhci_allocate_controller();
+            struct UHCI_Controller *uhci = uhci_allocate_controller();
             if(uhci) {
                 if(take_device_ownership(device) && enable_bus_master(device, PCI_COMMAND_IO_SPACE)) {
                     initialize_usb_devices(hci_controller_from_uhci(uhci), pci_address);
