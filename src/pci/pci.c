@@ -116,7 +116,7 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
             }
 
             const u32 pci_address = bar & ~0xfu;
-            XHCI_Controller *xhci = xhci_allocate_controller();
+            struct XHCI_Controller *xhci = xhci_allocate_controller();
             if(!xhci) {
                 break;
             }
