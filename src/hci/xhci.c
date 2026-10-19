@@ -1,13 +1,10 @@
 #include "xhci.h"
 #include "base.h"
 #include "ctrl.h"
-#include "output.h"
 
 #define WAIT_TIME_NANOSECONDS 1000000
 #define WAIT_MAX_RETRIES 1000
 
-/* Each controller owns statically allocated DMA rings and contexts.  Until
- * the kernel has a memory allocator, only one fits below the early stack. */
 #define XHCI_MAX_CONTROLLERS 4
 
 #define XHCI_ERROR -1
@@ -42,19 +39,9 @@
 
 static XHCI_Controller xhci_controllers[XHCI_MAX_CONTROLLERS];
 static u32 xhci_controller_count;
+
 static u8 scratchpad_pages[XHCI_SCRATCHPAD_CAPACITY][4096] ALIGN_DECLARATION(4096);
 static u32 scratchpad_pages_used;
-
-static
-void print_decimal_count(u32 count) {
-    char digits[4];
-    u32 length = 0;
-    do {
-        digits[sizeof(digits) - 1 - length++] = '0' + count % 10;
-        count /= 10;
-    } while(count);
-    os_output_print((Str8) { digits + sizeof(digits) - length, (s32)length });
-}
 
 static inline
 u32 mmio_read32(const volatile void *address) {
@@ -211,27 +198,23 @@ b8 wait_for_event(XHCI_Controller *controller, const u32 expected_type, const u6
         XHCI_TRB event;
         while(event_pop(controller, &event)) {
             const u64 pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
+
             if(trb_type(&event) == expected_type && expected_pointer && pointer != expected_pointer) {
                 if(expected_type == XHCI_TRB_TYPE_TRANSFER_EVENT && completion_code(&event) != 1 && completion_code(&event) != 13) {
-                    os_output_print(str8("xHCI: earlier transfer TRB error, code "));
-                    print_decimal_count(completion_code(&event));
-                    os_output_print(str8(".\n"));
                     return false;
                 }
                 continue;
             }
+
             if(trb_type(&event) == expected_type) {
                 if(result) *result = event;
                 if(completion_code(&event) == 1 || completion_code(&event) == 13) return true;
-                os_output_print(str8("xHCI: completion error, code "));
-                print_decimal_count(completion_code(&event));
-                os_output_print(str8(".\n"));
                 return false;
             }
         }
+
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
     }
-    os_output_print(expected_type == XHCI_TRB_TYPE_TRANSFER_EVENT ? str8("xHCI: transfer event timeout.\n") : str8("xHCI: command event timeout.\n"));
     return false;
 }
 
@@ -254,7 +237,6 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     const u32 dboff = mmio_read32(at(controller->mmio_base, 0x14));
     const u32 rtsoff = mmio_read32(at(controller->mmio_base, 0x18));
     if(capability_length < 0x20 || (hcsparams1 & 0xff) == 0) {
-        os_output_print(str8("xHCI: invalid capabilities.\n"));
         return false;
     }
 
@@ -264,30 +246,30 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     controller->context_size = (hccparams1 & (1u << 2)) ? 64 : 32;
     controller->port_count = (hcsparams1 >> 24) & 0xff;
     if(!take_legacy_ownership(controller, hccparams1)) {
-        os_output_print(str8("xHCI: firmware ownership timeout.\n"));
         return false;
     }
+
     if(!wait_for_controller_ready(controller)) {
-        os_output_print(str8("xHCI: controller not ready.\n"));
         return false;
     }
 
     mmio_write32(at(controller->operational_base, 0x00), 0);
     if(!wait_for_halted(controller, true)) {
-        os_output_print(str8("xHCI: halt timeout.\n"));
         return false;
     }
+
     mmio_write32(at(controller->operational_base, 0x00), XHCI_USBCMD_HOST_CONTROLLER_RESET);
+
     for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
         if(!(mmio_read32(at(controller->operational_base, 0x00)) & XHCI_USBCMD_HOST_CONTROLLER_RESET)) break;
+
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
         if(i + 1 == WAIT_MAX_RETRIES) {
-            os_output_print(str8("xHCI: reset timeout.\n"));
             return false;
         }
     }
+
     if(!wait_for_controller_ready(controller)) {
-        os_output_print(str8("xHCI: not ready after reset.\n"));
         return false;
     }
 
@@ -297,17 +279,13 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     if(scratchpad_count) {
         const u32 page_size = mmio_read32(at(controller->operational_base, 0x08));
         if(!(page_size & 1u)) {
-            os_output_print(str8("xHCI: controller does not support 4 KiB pages.\n"));
             return false;
         }
+
         if(scratchpad_count > XHCI_SCRATCHPAD_CAPACITY - scratchpad_pages_used) {
-            os_output_print(str8("xHCI: scratchpad pool too small; needs "));
-            print_decimal_count(scratchpad_count);
-            os_output_print(str8(" pages, has "));
-            print_decimal_count(XHCI_SCRATCHPAD_CAPACITY - scratchpad_pages_used);
-            os_output_print(str8(".\n"));
             return false;
         }
+
         for(u32 i = 0; i < scratchpad_count; ++i) {
             controller->scratchpad_array[i] = PHYSICAL_ADDRESS(scratchpad_pages[scratchpad_pages_used++]);
         }
@@ -328,7 +306,6 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
 
     mmio_write32(at(controller->operational_base, 0x00), XHCI_USBCMD_RUN_STOP);
     if(!wait_for_halted(controller, false)) {
-        os_output_print(str8("xHCI: start timeout.\n"));
         return false;
     }
     return true;
@@ -379,7 +356,6 @@ b8 xhci_reset_and_enable_port(XHCI_Controller *controller, const u8 port_idx) {
         }
     }
 
-    os_output_print(str8("xHCI: connected port did not enable.\n"));
     return false;
 }
 
