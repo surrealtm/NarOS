@@ -2,4 +2,4 @@
 
 #include "base.h"
 
-void os_output_print(Str8 string);
+void os_output_print(const Str8 format, ...);

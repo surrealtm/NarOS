@@ -49,6 +49,15 @@ static const u32 U32_MAX = 0xffffffff;
 static const u16 U16_MAX = 0xffff;
 static const u8  U8_MAX = 0xff;
 
+static const s64 S64_MAX = (s64) 0x7fffffffffffffff;
+static const s64 S64_MIN = 0x8000000000000000;
+static const s32 S32_MAX = 0x7fffffff;
+static const s32 S32_MIN = (s32) 0x80000000;
+static const s16 S16_MAX = 0x7fff;
+static const s16 S16_MIN = (s16) 0x8000;
+static const s8  S8_MAX  = 0x7f;
+static const s8  S8_MIN  = (s8) 0x80;
+
 STATIC_ASSERT(sizeof(u64) == 8 && sizeof(s64) == 8);
 STATIC_ASSERT(sizeof(u32) == 4 && sizeof(s32) == 4);
 STATIC_ASSERT(sizeof(u16) == 2 && sizeof(s16) == 2);
