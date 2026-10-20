@@ -24,21 +24,35 @@ void reserve(Print_Buffer *buffer, const u32 count) {
 }
 
 static
-void print_character(Print_Buffer *buffer, char character) {
+void print_character(Print_Buffer *buffer, const char character) {
     reserve(buffer, 1);
     buffer->characters[buffer->cursor] = character;
     ++buffer->cursor;
 }
 
-void print_format(const Str8 format, ...) {
-    va_list arguments;
-    va_start(arguments, format);
+static
+void print_unsigned_int(Print_Buffer *buffer, const unsigned int value) {
+    print_character(buffer, value + '0');
+}
 
+static
+void print_data_type(Print_Buffer *buffer, const char data_type, va_list *arguments) {
+    switch(data_type) {
+        case 'u': {
+            const unsigned int value = va_arg(*arguments, unsigned int);
+            print_unsigned_int(buffer, value);
+        } break;
+    }
+}
+
+void print_format(const Str8 format, va_list arguments) {
     Print_Buffer buffer = { .cursor = 0 };
 
     for (s32 i = 0; i < format.count;) {
-        if (format.data[i] == '%') {
-
+        if (format.data[i] == '%' && i + 1 < format.count) {
+            const char data_type = format.data[i + 1];
+            print_data_type(&buffer, data_type, &arguments);
+            i += 2;
         } else {
             print_character(&buffer, format.data[i]);
             ++i;
@@ -46,6 +60,4 @@ void print_format(const Str8 format, ...) {
     }
 
     flush(&buffer);
-
-    va_end(arguments);
 }

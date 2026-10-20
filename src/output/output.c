@@ -1,6 +1,11 @@
 #include "output.h"
 #include "print.h"
 
-void os_output_print(Str8 string) {
-    print_format(string);
+#include <stdarg.h>
+
+void os_output_print(const Str8 format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    print_format(format, arguments);
+    va_end(arguments);
 }
