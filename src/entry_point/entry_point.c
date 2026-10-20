@@ -29,7 +29,7 @@ int kernel_entry_point(const Boot_Info boot_info) {
     acpi_initialize();
     pci_initialize();
 
-    os_output_print(str8("This is a formatted print output, %u!\n"), 5);
+    os_output_print(str8("This is a formatted print output, %u!\n"), U32_MAX);
 
     terminal_run();
     os_ctrl_shut_down();

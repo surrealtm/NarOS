@@ -4,6 +4,27 @@
 
 #define PRINT_BUFFER_CAPACITY 256
 
+// ---------------------------------------------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+char character_from_digit(const u8 digit) {
+    if (digit >= 0 && digit <= 9) {
+        return '0' + digit;
+    } else if (digit >= 10 && digit <= 16) {
+        return 'a' + digit;
+    } else {
+        return '.';
+    }
+}
+
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Print Buffer
+// ---------------------------------------------------------------------------------------------------------------
+
 typedef struct Print_Buffer {
     char characters[PRINT_BUFFER_CAPACITY];
     u32 cursor;
@@ -31,8 +52,42 @@ void print_character(Print_Buffer *buffer, const char character) {
 }
 
 static
-void print_unsigned_int(Print_Buffer *buffer, const unsigned int value) {
-    print_character(buffer, value + '0');
+void print_character_at_offset(Print_Buffer *buffer, const char character, const s32 offset_from_cursor) {
+    assert(buffer->cursor + offset_from_cursor < PRINT_BUFFER_CAPACITY, "Tried to write out-of-bounds of the print buffer.");
+    buffer->characters[buffer->cursor + offset_from_cursor] = character;
+}
+
+static
+s32 calculate_number_of_digits_unsigned(u64 value, const u64 radix) {
+    if(value == 0) return 1;
+
+    s32 number_of_digits = 0;
+
+    while (value > 0) {
+        ++number_of_digits;
+        value /= radix;
+    }
+
+    return number_of_digits;
+}
+
+static
+void print_unsigned_int(Print_Buffer *buffer, unsigned int value) {
+    const u64 radix = 10;
+
+    const s32 number_of_digits = calculate_number_of_digits_unsigned(value, radix);
+
+    reserve(buffer, number_of_digits);
+
+    for (s32 digit_idx = 0; digit_idx < number_of_digits; ++digit_idx) {
+        const s32 digit = value % radix;
+        const char character = character_from_digit(digit);
+        const s32 digit_offset = (number_of_digits - 1) - digit_idx;
+        print_character_at_offset(buffer, character, digit_offset);
+        value /= radix;
+    }
+
+    buffer->cursor += number_of_digits;
 }
 
 static
