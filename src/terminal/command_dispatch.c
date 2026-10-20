@@ -66,11 +66,13 @@ s32 cmd_block_devices(void) {
     divider("Block Devices");
 
     s32 device_count;
-    const struct Block_Device *devices = block_device_enumerate(&device_count);
+    const Block_Device *devices = block_device_enumerate(&device_count);
 
     for(s32 device_idx = 0; device_idx < device_count; ++device_idx) {
-        const struct Block_Device *device = &devices[device_idx];
-        os_output_print(str8("Device: %u\n"), device);
+        const Block_Device *device = &devices[device_idx];
+        Block_Device_Metadata metadata;
+        block_device_get_metadata(device, &metadata);
+        os_output_print(str8("Device: %s\n"), str8_from_array(metadata.device_name));
     }
 
     divider("Block Devices");

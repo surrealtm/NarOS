@@ -102,6 +102,12 @@ s32 cstring_length(const char *string) {
     return count;
 }
 
+s32 cstring_length_bounded(const char *string, const s32 max_size) {
+    s32 count;
+    for(count = 0; count < max_size && string[count]; ++count) {}
+    return count;
+}
+
 void memset(void *dst, const u8 value, const u32 size_in_bytes) {
     set_memory(dst, value, size_in_bytes);
 }

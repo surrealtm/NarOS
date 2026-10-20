@@ -19,3 +19,7 @@ const Block_Device *block_device_enumerate(s32 *count) {
     *count = block_device_count;
     return block_devices;
 }
+
+b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result) {
+    return device->get_metadata(device->interface_impl, result);
+}

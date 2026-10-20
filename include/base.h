@@ -73,6 +73,7 @@ typedef struct Str8 {
 
 #define str8_lit(literal) {literal, sizeof(literal) - 1}
 #define str8(literal) (Str8) {literal, cstring_length(literal)}
+#define str8_from_array(array) (Str8) {array, cstring_length_bounded(array, ARRAY_COUNT(array))}
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
@@ -84,6 +85,7 @@ void move_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);
+s32 cstring_length_bounded(const char *string, const s32 max_size);
 
 void to_big_endian(void *dst, const void *src, u32 size_in_bytes);
 u64 u64_to_big_endian(u64 src);

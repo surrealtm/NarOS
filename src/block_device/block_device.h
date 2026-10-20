@@ -5,7 +5,7 @@
 struct Block_Device;
 
 typedef struct Block_Device_Metadata {
-    Str8 device_name;
+    char device_name[128];
 } Block_Device_Metadata;
 
 typedef b8(*Block_Device_Get_Metadata)(struct Block_Device *device, Block_Device_Metadata *result);
@@ -25,3 +25,9 @@ Block_Device *block_device_allocate(void);
  * The size of the array is returned in `count`.
  */
 const Block_Device *block_device_enumerate(s32 *count);
+
+/**
+ * Returns true if the metadata could be gathered from the device.
+ * The metadata is written into `result`.
+ */
+b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result);

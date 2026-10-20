@@ -1,11 +1,16 @@
 #include "mass_storage.h"
+#include "base.h"
 #include "scsi.h"
 #include "block_device/block_device.h"
 
 static
 b8 get_metadata(const struct USB_Device *device, Block_Device_Metadata *result) {
-    (void) device; // @Incomplete
-    result->device_name = str8("MassStorageDevice");
+    SCSI_Inquiry inquiry = { 0 };
+    if(!scsi_inquire(device, &inquiry)) return false;
+
+    *result = (Block_Device_Metadata) { 0 };
+    move_memory(result->device_name, inquiry.product, min(ARRAY_COUNT(result->device_name), ARRAY_COUNT(inquiry.product)));
+
     return true;
 }
 
