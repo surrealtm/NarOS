@@ -10,7 +10,6 @@
 #define XHCI_ERROR -1
 #define XHCI_DEVICE_CAPACITY 8 // Shared across controllers, matching the USB layer's global device limit.
 #define XHCI_ENDPOINT_CAPACITY 32
-#define XHCI_BULK_ENDPOINT_CAPACITY 2
 #define XHCI_RING_CAPACITY 64
 #define XHCI_CONTEXT_SIZE 64
 #define XHCI_SCRATCHPAD_CAPACITY 40
@@ -29,26 +28,6 @@ typedef enum XHCI_USBSTS {
     XHCI_USBSTS_Halted = 1 << 0,
     XHCI_USBSTS_Controller_Not_Ready = 1 << 11,
 } XHCI_USBSTS;
-
-typedef enum XHCI_Register {
-    XHCI_CAPLENGTH = 0x00,
-    XHCI_HCSPARAMS1 = 0x04,
-    XHCI_HCSPARAMS2 = 0x08,
-    XHCI_HCCPARAMS1 = 0x10,
-    XHCI_DBOFF = 0x14,
-    XHCI_RTSOFF = 0x18,
-    XHCI_USBCMD_Register = 0x00,
-    XHCI_USBSTS_Register = 0x04,
-    XHCI_PAGESIZE = 0x08,
-    XHCI_CRCR = 0x18,
-    XHCI_DCBAAP = 0x30,
-    XHCI_CONFIG = 0x38,
-    XHCI_PORTSC_Base = 0x400,
-    XHCI_PORTSC_Stride = 0x10,
-    XHCI_ERSTSZ = 0x28,
-    XHCI_ERSTBA = 0x30,
-    XHCI_ERDP = 0x38,
-} XHCI_Register;
 
 typedef enum XHCI_Context_Dword {
     XHCI_INPUT_ADD_CONTEXT_FLAGS = 1,
@@ -99,17 +78,11 @@ typedef struct XHCI_TRB {
     u32 control;
 } PACKED_STRUCT XHCI_TRB;
 
-typedef struct XHCI_Producer_Ring {
+typedef struct XHCI_Ring {
     XHCI_TRB trbs[XHCI_RING_CAPACITY] ALIGN_DECLARATION(64);
-    u32 enqueue_index;
-    b8 producer_cycle;
-} XHCI_Producer_Ring;
-
-typedef struct XHCI_Event_Ring {
-    XHCI_TRB trbs[XHCI_RING_CAPACITY] ALIGN_DECLARATION(64);
-    u32 dequeue_index;
-    b8 consumer_cycle;
-} XHCI_Event_Ring;
+    u32 index;
+    b8 cycle;
+} XHCI_Ring;
 
 typedef struct XHCI_ERST_Entry {
     u64 segment_base;
@@ -122,13 +95,13 @@ typedef struct XHCI_Device {
     u8 port;
     u8 device_index;
     u8 slot;
-    u8 bulk_endpoint_ids[XHCI_BULK_ENDPOINT_CAPACITY];
+    u8 bulk_endpoint_ids[HCI_DIRECTION_COUNT];
     u8 context_entries;
     u16 ep0_packet_size;
     u8 device_contexts[XHCI_ENDPOINT_CAPACITY][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
     u8 input_contexts[XHCI_ENDPOINT_CAPACITY + 1][XHCI_CONTEXT_SIZE] ALIGN_DECLARATION(64);
-    XHCI_Producer_Ring control_ring;
-    XHCI_Producer_Ring bulk_rings[XHCI_BULK_ENDPOINT_CAPACITY];
+    XHCI_Ring control_ring;
+    XHCI_Ring bulk_rings[HCI_DIRECTION_COUNT];
 } XHCI_Device;
 
 typedef struct XHCI_Controller {
@@ -144,8 +117,8 @@ typedef struct XHCI_Controller {
     XHCI_Device *pending_device;
     u64 dcbaa[XHCI_DEVICE_CAPACITY + 1] ALIGN_DECLARATION(64);
     u64 scratchpad_array[XHCI_SCRATCHPAD_CAPACITY] ALIGN_DECLARATION(64);
-    XHCI_Producer_Ring command_ring;
-    XHCI_Event_Ring event_ring;
+    XHCI_Ring command_ring;
+    XHCI_Ring event_ring;
     XHCI_ERST_Entry event_ring_segment_table ALIGN_DECLARATION(64);
 } XHCI_Controller;
 
@@ -197,49 +170,29 @@ u32 completion_code(const XHCI_TRB *trb) {
 }
 
 static
-void ring_initialize(XHCI_Producer_Ring *ring) {
+void ring_initialize(XHCI_Ring *ring) {
     ZERO_STRUCT(ring);
-    ring->producer_cycle = 1;
+    ring->cycle = 1;
     ring->trbs[XHCI_RING_CAPACITY - 1] = (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(ring->trbs), .control = XHCI_TRB_TYPE_Link | XHCI_TRB_Cycle | (1u << 1) };
 }
 
 static
-void event_ring_initialize(XHCI_Event_Ring *ring) {
-    ZERO_STRUCT(ring);
-    ring->consumer_cycle = 1;
-}
-
-static
-XHCI_TRB *ring_push(XHCI_Producer_Ring *ring, XHCI_TRB trb) {
-    if(ring->enqueue_index == XHCI_RING_CAPACITY - 1) {
-        ring->trbs[ring->enqueue_index].control = XHCI_TRB_TYPE_Link | (ring->producer_cycle ? XHCI_TRB_Cycle : 0) | (1u << 1);
-        ring->enqueue_index = 0;
-        ring->producer_cycle = !ring->producer_cycle;
+XHCI_TRB *ring_push(XHCI_Ring *ring, XHCI_TRB trb) {
+    if(ring->index == XHCI_RING_CAPACITY - 1) {
+        ring->trbs[ring->index].control = XHCI_TRB_TYPE_Link | (ring->cycle ? XHCI_TRB_Cycle : 0) | (1u << 1);
+        ring->index = 0;
+        ring->cycle = !ring->cycle;
     }
 
-    trb.control |= ring->producer_cycle ? XHCI_TRB_Cycle : 0;
-    ring->trbs[ring->enqueue_index] = trb;
-    return &ring->trbs[ring->enqueue_index++];
+    trb.control |= ring->cycle ? XHCI_TRB_Cycle : 0;
+    ring->trbs[ring->index] = trb;
+    return &ring->trbs[ring->index++];
 }
 
 static
-b8 controller_is_halted(const XHCI_Controller *controller) {
-    return (mmio_read32(at(controller->operational_base, XHCI_USBSTS_Register)) & XHCI_USBSTS_Halted) != 0;
-}
-
-static
-b8 wait_for_halted(const XHCI_Controller *controller, const b8 halted) {
+b8 wait_for_bits(const volatile void *address, const u32 mask, const b8 set) {
     for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-        if(controller_is_halted(controller) == halted) return true;
-        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
-    }
-    return false;
-}
-
-static
-b8 wait_for_controller_ready(const XHCI_Controller *controller) {
-    for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-        if(!(mmio_read32(at(controller->operational_base, XHCI_USBSTS_Register)) & XHCI_USBSTS_Controller_Not_Ready)) return true;
+        if((mmio_read32(address) & mask) == (set ? mask : 0)) return true;
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
     }
     return false;
@@ -254,23 +207,16 @@ b8 take_legacy_ownership(XHCI_Controller *controller, const u32 hccparams1) {
 
     for(u32 capability_count = 0; capability_offset && capability_count < 64; ++capability_count) {
         const u32 header = mmio_read32(at(controller->mmio_base, capability_offset));
-        const u8 capability_id = header & 0xff;
-        const u8 next_capability_offset = (header >> 8) & 0xff;
-
-        if(capability_id == 1) { /* USB Legacy Support extended capability */
+        if((header & 0xff) == 1) { /* USB Legacy Support extended capability */
             /* The ownership semaphores share the extended-capability header
              * dword.  The following dword is USBLEGSUP control/status, not
              * the semaphore register. */
             volatile u8 *legacy_support = at(controller->mmio_base, capability_offset);
             mmio_write32(legacy_support, mmio_read32(legacy_support) | (1u << 24));
-            for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-                if(!(mmio_read32(legacy_support) & (1u << 16))) return true;
-                os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
-            }
-            return false;
+            return wait_for_bits(legacy_support, 1u << 16, false);
         }
 
-        capability_offset = (u32)next_capability_offset << 2;
+        capability_offset = ((header >> 8) & 0xff) << 2;
     }
 
     return true;
@@ -300,37 +246,28 @@ XHCI_Device *free_device(void) {
 }
 
 static
-XHCI_Producer_Ring *ring_for_endpoint(XHCI_Device *device, const u8 id) {
-    if(id == 1) return &device->control_ring;
-    for(u32 i = 0; i < ARRAY_COUNT(device->bulk_endpoint_ids); ++i) {
-        if(device->bulk_endpoint_ids[i] == id) return &device->bulk_rings[i];
-    }
-    return null;
-}
-
-static
 u8 endpoint_id(const u8 endpoint, const HCI_Direction direction) {
     return endpoint == 0 ? 1 : (u8)(endpoint * 2 + (direction == HCI_DIRECTION_In ? 1 : 0));
 }
 
 static
 b8 event_pop(XHCI_Controller *controller, XHCI_TRB *event) {
-    XHCI_Event_Ring *ring = &controller->event_ring;
-    volatile XHCI_TRB *trb = &ring->trbs[ring->dequeue_index];
+    XHCI_Ring *ring = &controller->event_ring;
+    volatile XHCI_TRB *trb = &ring->trbs[ring->index];
     memory_barrier();
-    if(((trb->control & XHCI_TRB_Cycle) != 0) != ring->consumer_cycle) return false;
+    if(((trb->control & XHCI_TRB_Cycle) != 0) != ring->cycle) return false;
 
     event->parameter_low = trb->parameter_low;
     event->parameter_high = trb->parameter_high;
     event->status = trb->status;
     event->control = trb->control;
-    ++ring->dequeue_index;
-    if(ring->dequeue_index == XHCI_RING_CAPACITY) {
-        ring->dequeue_index = 0;
-        ring->consumer_cycle = !ring->consumer_cycle;
+    ++ring->index;
+    if(ring->index == XHCI_RING_CAPACITY) {
+        ring->index = 0;
+        ring->cycle = !ring->cycle;
     }
 
-    mmio_write64(at(controller->runtime_base, XHCI_ERDP), PHYSICAL_ADDRESS(&ring->trbs[ring->dequeue_index]) | (1u << 3));
+    mmio_write64(at(controller->runtime_base, 0x38), PHYSICAL_ADDRESS(&ring->trbs[ring->index]) | (1u << 3));
     return true;
 }
 
@@ -341,18 +278,16 @@ b8 wait_for_event(XHCI_Controller *controller, const u32 expected_type, const u6
         while(event_pop(controller, &event)) {
             const u64 pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
 
-            if(trb_type(&event) == expected_type && expected_pointer && pointer != expected_pointer) {
+            if(trb_type(&event) != expected_type) continue;
+            if(expected_pointer && pointer != expected_pointer) {
                 if(expected_type == XHCI_TRB_TYPE_Transfer_Event && completion_code(&event) != 1 && completion_code(&event) != 13) {
                     return false;
                 }
                 continue;
             }
 
-            if(trb_type(&event) == expected_type) {
-                if(result) *result = event;
-                if(completion_code(&event) == 1 || completion_code(&event) == 13) return true;
-                return false;
-            }
+            if(result) *result = event;
+            return completion_code(&event) == 1 || completion_code(&event) == 13;
         }
 
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
@@ -372,62 +307,34 @@ static
 b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address) {
     controller->mmio_base = (volatile u8 *)(u32)(pci_address & ~0xfu);
 
-    const u8 capability_length = *at(controller->mmio_base, XHCI_CAPLENGTH);
-    const u32 hcsparams1 = mmio_read32(at(controller->mmio_base, XHCI_HCSPARAMS1));
-    const u32 hcsparams2 = mmio_read32(at(controller->mmio_base, XHCI_HCSPARAMS2));
-    const u32 hccparams1 = mmio_read32(at(controller->mmio_base, XHCI_HCCPARAMS1));
-    const u32 dboff = mmio_read32(at(controller->mmio_base, XHCI_DBOFF));
-    const u32 rtsoff = mmio_read32(at(controller->mmio_base, XHCI_RTSOFF));
-    if(capability_length < 0x20 || (hcsparams1 & 0xff) == 0) {
-        return false;
-    }
+    const u8 capability_length = *controller->mmio_base;
+    const u32 hcsparams1 = mmio_read32(at(controller->mmio_base, 0x04));
+    const u32 hcsparams2 = mmio_read32(at(controller->mmio_base, 0x08));
+    const u32 hccparams1 = mmio_read32(at(controller->mmio_base, 0x10));
+    if(capability_length < 0x20 || (hcsparams1 & 0xff) == 0) return false;
 
     controller->operational_base = at(controller->mmio_base, capability_length);
-    controller->runtime_base = at(controller->mmio_base, rtsoff);
-    controller->doorbell_base = at(controller->mmio_base, dboff);
+    controller->runtime_base = at(controller->mmio_base, mmio_read32(at(controller->mmio_base, 0x18)));
+    controller->doorbell_base = at(controller->mmio_base, mmio_read32(at(controller->mmio_base, 0x14)));
     controller->context_size = (hccparams1 & (1u << 2)) ? 64 : 32;
     controller->port_count = (hcsparams1 >> 24) & 0xff;
     controller->slot_count = min(hcsparams1 & 0xff, XHCI_DEVICE_CAPACITY);
-    if(!take_legacy_ownership(controller, hccparams1)) {
-        return false;
-    }
+    if(!take_legacy_ownership(controller, hccparams1)) return false;
+    if(!wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Controller_Not_Ready, false)) return false;
 
-    if(!wait_for_controller_ready(controller)) {
-        return false;
-    }
+    mmio_write32(at(controller->operational_base, 0x00), 0);
+    if(!wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Halted, true)) return false;
 
-    mmio_write32(at(controller->operational_base, XHCI_USBCMD_Register), 0);
-    if(!wait_for_halted(controller, true)) {
-        return false;
-    }
-
-    mmio_write32(at(controller->operational_base, XHCI_USBCMD_Register), XHCI_USBCMD_Host_Controller_Reset);
-
-    for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-        if(!(mmio_read32(at(controller->operational_base, XHCI_USBCMD_Register)) & XHCI_USBCMD_Host_Controller_Reset)) break;
-
-        os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
-        if(i + 1 == WAIT_MAX_RETRIES) {
-            return false;
-        }
-    }
-
-    if(!wait_for_controller_ready(controller)) {
-        return false;
-    }
+    mmio_write32(at(controller->operational_base, 0x00), XHCI_USBCMD_Host_Controller_Reset);
+    if(!wait_for_bits(at(controller->operational_base, 0x00), XHCI_USBCMD_Host_Controller_Reset, false)) return false;
+    if(!wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Controller_Not_Ready, false)) return false;
 
     /* A real controller may require private DMA pages.  QEMU commonly asks
      * for none, so leaving DCBAA[0] empty hides this initialization error. */
     const u32 scratchpad_count = ((hcsparams2 >> 27) & 0x1f) | (((hcsparams2 >> 21) & 0x1f) << 5);
     if(scratchpad_count) {
-        const u32 page_size = mmio_read32(at(controller->operational_base, XHCI_PAGESIZE));
-        if(!(page_size & 1u)) {
-            return false;
-        }
-
-        if(scratchpad_count > XHCI_SCRATCHPAD_CAPACITY - scratchpad_pages_used) {
-            return false;
-        }
+        if(!(mmio_read32(at(controller->operational_base, 0x08)) & 1u)) return false;
+        if(scratchpad_count > XHCI_SCRATCHPAD_CAPACITY - scratchpad_pages_used) return false;
 
         for(u32 i = 0; i < scratchpad_count; ++i) {
             controller->scratchpad_array[i] = PHYSICAL_ADDRESS(scratchpad_pages[scratchpad_pages_used++]);
@@ -436,34 +343,29 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     }
 
     ring_initialize(&controller->command_ring);
-    event_ring_initialize(&controller->event_ring);
+    ZERO_STRUCT(&controller->event_ring);
+    controller->event_ring.cycle = 1;
     controller->event_ring_segment_table = (XHCI_ERST_Entry) { PHYSICAL_ADDRESS(controller->event_ring.trbs), XHCI_RING_CAPACITY, 0 };
 
-    mmio_write64(at(controller->operational_base, XHCI_DCBAAP), PHYSICAL_ADDRESS(controller->dcbaa));
-    mmio_write64(at(controller->operational_base, XHCI_CRCR), PHYSICAL_ADDRESS(controller->command_ring.trbs) | 1);
-    mmio_write32(at(controller->operational_base, XHCI_CONFIG), controller->slot_count);
-    mmio_write32(at(controller->runtime_base, XHCI_ERSTSZ), 1);
-    mmio_write64(at(controller->runtime_base, XHCI_ERSTBA), PHYSICAL_ADDRESS(&controller->event_ring_segment_table));
-    mmio_write64(at(controller->runtime_base, XHCI_ERDP), PHYSICAL_ADDRESS(controller->event_ring.trbs));
+    mmio_write64(at(controller->operational_base, 0x30), PHYSICAL_ADDRESS(controller->dcbaa));
+    mmio_write64(at(controller->operational_base, 0x18), PHYSICAL_ADDRESS(controller->command_ring.trbs) | 1);
+    mmio_write32(at(controller->operational_base, 0x38), controller->slot_count);
+    mmio_write32(at(controller->runtime_base, 0x28), 1);
+    mmio_write64(at(controller->runtime_base, 0x30), PHYSICAL_ADDRESS(&controller->event_ring_segment_table));
+    mmio_write64(at(controller->runtime_base, 0x38), PHYSICAL_ADDRESS(controller->event_ring.trbs));
     memory_barrier();
 
-    mmio_write32(at(controller->operational_base, XHCI_USBCMD_Register), XHCI_USBCMD_Run_Stop);
-    if(!wait_for_halted(controller, false)) {
-        return false;
-    }
-    return true;
+    mmio_write32(at(controller->operational_base, 0x00), XHCI_USBCMD_Run_Stop);
+    return wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Halted, false);
 }
 
-static
-s32 xhci_get_port_capacity(const XHCI_Controller *controller) {
-    return controller->port_count;
-}
+static s32 xhci_get_port_capacity(const XHCI_Controller *controller) { return controller->port_count; }
 
 static
 HCI_Device_Speed xhci_get_port_speed(const XHCI_Controller *controller, const u8 port_idx) {
     if(port_idx >= controller->port_count) return HCI_DEVICE_SPEED_Error;
 
-    const u32 portsc = mmio_read32(at(controller->operational_base, XHCI_PORTSC_Base + port_idx * XHCI_PORTSC_Stride));
+    const u32 portsc = mmio_read32(at(controller->operational_base, 0x400 + port_idx * 0x10));
     switch((portsc >> 10) & 0xf) {
         case 1: return HCI_DEVICE_SPEED_Full;
         case 2: return HCI_DEVICE_SPEED_Low;
@@ -480,7 +382,7 @@ static
 b8 xhci_reset_and_enable_port(XHCI_Controller *controller, const u8 port_idx) {
     if(port_idx >= controller->port_count) return false;
 
-    volatile u8 *port = at(controller->operational_base, XHCI_PORTSC_Base + port_idx * XHCI_PORTSC_Stride);
+    volatile u8 *port = at(controller->operational_base, 0x400 + port_idx * 0x10);
     const u32 initial = mmio_read32(port);
     if(!(initial & XHCI_PORTSC_Connect_Status)) return false;
 
@@ -488,16 +390,12 @@ b8 xhci_reset_and_enable_port(XHCI_Controller *controller, const u8 port_idx) {
         const u32 reset = attempt == 0 ? XHCI_PORTSC_Port_Reset : XHCI_PORTSC_Warm_Reset;
         mmio_write32(port, XHCI_PORTSC_Port_Power | reset | XHCI_PORTSC_CHANGE_BITS);
 
-        for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
-            const u32 status = mmio_read32(port);
-            if((status & XHCI_PORTSC_Connect_Status) && (status & XHCI_PORTSC_Port_Enabled)) {
-                mmio_write32(port, XHCI_PORTSC_Port_Power | (status & XHCI_PORTSC_CHANGE_BITS));
-                controller->enumerating_port = port_idx;
-                controller->has_enumerating_port = true;
-                controller->pending_device = null;
-                return true;
-            }
-            os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
+        if(wait_for_bits(port, XHCI_PORTSC_Connect_Status | XHCI_PORTSC_Port_Enabled, true)) {
+            mmio_write32(port, XHCI_PORTSC_Port_Power | (mmio_read32(port) & XHCI_PORTSC_CHANGE_BITS));
+            controller->enumerating_port = port_idx;
+            controller->has_enumerating_port = true;
+            controller->pending_device = null;
+            return true;
         }
     }
 
@@ -505,7 +403,7 @@ b8 xhci_reset_and_enable_port(XHCI_Controller *controller, const u8 port_idx) {
 }
 
 static
-void initialize_endpoint_context(XHCI_Controller *controller, XHCI_Device *device, const u8 id, XHCI_Producer_Ring *ring, const u16 maximum_packet_size) {
+void initialize_endpoint_context(XHCI_Controller *controller, XHCI_Device *device, const u8 id, XHCI_Ring *ring, const u16 maximum_packet_size) {
     u32 *endpoint = input_context(controller, device, id + 1);
     endpoint[XHCI_ENDPOINT_TYPE_AND_PACKET_SIZE] = ((u32)maximum_packet_size << 16) |
         ((id == 1 ? 4u : (id & 1 ? 7u : 3u)) << 3) | (3u << 1);
@@ -524,7 +422,7 @@ b8 xhci_configure_device(XHCI_Controller *controller, const u8 device_idx, const
         if(!device) return false;
 
         const u8 port = controller->enumerating_port;
-        const u32 speed_code = (mmio_read32(at(controller->operational_base, XHCI_PORTSC_Base + port * XHCI_PORTSC_Stride)) >> 10) & 0xf;
+        const u32 speed_code = (mmio_read32(at(controller->operational_base, 0x400 + port * 0x10)) >> 10) & 0xf;
         if(speed_code == 0) return false;
         XHCI_TRB event;
         if(!submit_command(controller, (XHCI_TRB) { .control = XHCI_TRB_TYPE_Enable_Slot_Command }, &event)) return false;
@@ -575,7 +473,7 @@ b8 xhci_configure_device(XHCI_Controller *controller, const u8 device_idx, const
 static
 b8 xhci_configure_endpoint_direction(XHCI_Controller *controller, const u8 device_idx, const u8 endpoint, const HCI_Direction direction, const u16 maximum_packet_size) {
     XHCI_Device *device = find_device(controller, device_idx);
-    if(endpoint >= 16 || direction >= HCI_DIRECTION_COUNT || maximum_packet_size == 0 || !device) return false;
+    if(endpoint >= 16 || (u32)direction >= HCI_DIRECTION_COUNT || maximum_packet_size == 0 || !device) return false;
 
     const u8 id = endpoint_id(endpoint, direction);
     if(endpoint == 0) {
@@ -600,7 +498,7 @@ b8 xhci_configure_endpoint_direction(XHCI_Controller *controller, const u8 devic
 
     const u8 bulk_index = (u8)direction;
     if(device->bulk_endpoint_ids[bulk_index] && device->bulk_endpoint_ids[bulk_index] != id) return false;
-    XHCI_Producer_Ring *ring = &device->bulk_rings[bulk_index];
+    XHCI_Ring *ring = &device->bulk_rings[bulk_index];
     if(!device->bulk_endpoint_ids[bulk_index]) ring_initialize(ring);
 
     u32 *control = input_context(controller, device, 0);
@@ -638,7 +536,7 @@ s32 xhci_control(XHCI_Controller *controller, const u8 device_idx, const HCI_Dir
     const u8 *setup_bytes = header;
     if(direction == HCI_DIRECTION_Out && setup_bytes[0] == 0 && setup_bytes[1] == 5 && payload_size == 0) return 0;
 
-    XHCI_Producer_Ring *ring = &device->control_ring;
+    XHCI_Ring *ring = &device->control_ring;
     u64 setup = 0;
     move_memory(&setup, header, 8);
 
@@ -658,38 +556,23 @@ s32 xhci_control(XHCI_Controller *controller, const u8 device_idx, const HCI_Dir
 static
 s32 xhci_bulk(XHCI_Controller *controller, const u8 device_idx, const u8 endpoint, const HCI_Direction direction, void *data, const u32 size) {
     if(!size || !data) return 0;
-    if(endpoint == 0 || endpoint >= 16) return XHCI_ERROR;
+    if(endpoint == 0 || endpoint >= 16 || (u32)direction >= HCI_DIRECTION_COUNT) return XHCI_ERROR;
 
     XHCI_Device *device = find_device(controller, device_idx);
     if(!device) return XHCI_ERROR;
     const u8 id = endpoint_id(endpoint, direction);
-    XHCI_Producer_Ring *ring = ring_for_endpoint(device, id);
-    if(!ring) return XHCI_ERROR;
+    if(device->bulk_endpoint_ids[direction] != id) return XHCI_ERROR;
+    XHCI_Ring *ring = &device->bulk_rings[direction];
     XHCI_TRB *last = ring_push(ring, (XHCI_TRB) { .parameter_low = PHYSICAL_ADDRESS(data), .status = size, .control = XHCI_TRB_TYPE_Normal | XHCI_TRB_IOC });
 
     const s32 residual = submit_transfer(controller, device, id, last);
     return residual < 0 ? XHCI_ERROR : (s32)size - residual;
 }
 
-static
-s32 xhci_control_read(XHCI_Controller *c, u8 d, void *h, u32 hs, void *p, u32 ps) {
-    return xhci_control(c, d, HCI_DIRECTION_In, h, hs, p, ps);
-}
-
-static
-s32 xhci_control_write(XHCI_Controller *c, u8 d, const void *h, u32 hs, const void *p, u32 ps) {
-    return xhci_control(c, d, HCI_DIRECTION_Out, h, hs, (void *)p, ps);
-}
-
-static
-s32 xhci_bulk_read(XHCI_Controller *c, u8 d, u8 e, void *p, u32 s) {
-    return xhci_bulk(c, d, e, HCI_DIRECTION_In, p, s);
-}
-
-static
-s32 xhci_bulk_write(XHCI_Controller *c, u8 d, u8 e, const void *p, u32 s) {
-    return xhci_bulk(c, d, e, HCI_DIRECTION_Out, (void *)p, s);
-}
+static s32 xhci_control_read(XHCI_Controller *c, u8 d, void *h, u32 hs, void *p, u32 ps) { return xhci_control(c, d, HCI_DIRECTION_In, h, hs, p, ps); }
+static s32 xhci_control_write(XHCI_Controller *c, u8 d, const void *h, u32 hs, const void *p, u32 ps) { return xhci_control(c, d, HCI_DIRECTION_Out, h, hs, (void *)p, ps); }
+static s32 xhci_bulk_read(XHCI_Controller *c, u8 d, u8 e, void *p, u32 s) { return xhci_bulk(c, d, e, HCI_DIRECTION_In, p, s); }
+static s32 xhci_bulk_write(XHCI_Controller *c, u8 d, u8 e, const void *p, u32 s) { return xhci_bulk(c, d, e, HCI_DIRECTION_Out, (void *)p, s); }
 
 XHCI_Controller *xhci_allocate_controller(void) {
     if(xhci_controller_count >= XHCI_MAX_CONTROLLERS) return null;
