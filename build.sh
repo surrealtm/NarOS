@@ -175,6 +175,7 @@ KERNEL_C_SOURCE_FILES=(
     "terminal/terminal.c"
     "terminal/text_input.c"
     "usb/hid.c"
+    "usb/mass_storage.c"
     "usb/usb.c"
     "usb/scsi.c"
 )

@@ -1,5 +1,6 @@
 #include "usb.h"
 #include "usb/scsi.h"
+#include "usb/mass_storage.h"
 
 #include "output.h"
 
@@ -435,6 +436,11 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
 
     if (device->keyboard.supported) {
         hci_initialize_keyboard_report(&device->hci, device->address, device->keyboard.interrupt_in_endpoint);
+    }
+
+    if (device->mass_storage.supported) {
+        // @Cleanup: Get rid of the `maybe` in the name?
+        mass_storage_maybe_register_block_device(device);
     }
 
     return true;

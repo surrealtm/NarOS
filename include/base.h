@@ -68,7 +68,7 @@ STATIC_ASSERT(sizeof(b8)  == 1);
 
 typedef struct Str8 {
     const char *data;
-    const s32 count;
+    s32 count;
 } Str8;
 
 #define str8_lit(literal) {literal, sizeof(literal) - 1}
