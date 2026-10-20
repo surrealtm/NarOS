@@ -157,6 +157,7 @@ echo " + Compiling the kernel with options: ${KERNEL_COMPILER_OPTIONS[@]}"
 KERNEL_C_SOURCE_FILES=(
     "acpi/acpi.c"
     "base/base.c"
+    "block_device/block_device.c"
     "ctrl/ctrl.c"
     "display/display.c"
     "entry_point/entry_point.c"

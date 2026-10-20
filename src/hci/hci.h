@@ -20,14 +20,14 @@ typedef enum HCI_Direction {
 typedef b8(*HCI_Initialize_Controller)(void *controller_impl, u32 pci_address, u8 interrupt_signal);
 typedef b8(*HCI_Initialize_Keyboard_Report)(void *controller_impl, u8 device_idx, u8 endpoint_idx);
 typedef s32(*HCI_Get_Port_Capacity)(void *controller_impl);
-typedef HCI_Device_Speed(*HCI_Get_Port_Speed)(void *controller_impl,  u8 port_idx);
-typedef b8(*HCI_Reset_And_Enable_Port)(void *controller_impl,  u8 port_idx);
-typedef b8(*HCI_Configure_Device)(void *controller_impl,  u8 device_idx,  HCI_Device_Speed device_speed);
-typedef b8(*HCI_Configure_Endpoint_Direction)(void *controller_impl,  u8 device_idx,  u8 endpoint_idx,  HCI_Direction direction,  u16 maximum_packet_size);
-typedef s32(*HCI_Control_Read)(void *controller_impl,  u8 device_idx, void *header_data,  u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
-typedef s32(*HCI_Control_Write)(void *controller_impl,  u8 device_idx, const void *header_data,  u32 header_size_in_bytes, const void *payload,  u32 payload_size_in_bytes);
-typedef s32(*HCI_Bulk_Write)(void *controller_impl,  u8 device_idx,  u8 endpoint_idx, const void *data,  u32 size_in_bytes);
-typedef s32(*HCI_Bulk_Read)(void *controller_impl,  u8 device_idx,  u8 endpoint_idx, void *data,  u32 size_in_bytes);
+typedef HCI_Device_Speed(*HCI_Get_Port_Speed)(void *controller_impl, u8 port_idx);
+typedef b8(*HCI_Reset_And_Enable_Port)(void *controller_impl, u8 port_idx);
+typedef b8(*HCI_Configure_Device)(void *controller_impl, u8 device_idx, HCI_Device_Speed device_speed);
+typedef b8(*HCI_Configure_Endpoint_Direction)(void *controller_impl, u8 device_idx, u8 endpoint_idx,  HCI_Direction direction, u16 maximum_packet_size);
+typedef s32(*HCI_Control_Read)(void *controller_impl, u8 device_idx, void *header_data, u32 header_size_in_bytes, void *payload, u32 payload_size_in_bytes);
+typedef s32(*HCI_Control_Write)(void *controller_impl, u8 device_idx, const void *header_data, u32 header_size_in_bytes, const void *payload, u32 payload_size_in_bytes);
+typedef s32(*HCI_Bulk_Write)(void *controller_impl, u8 device_idx, u8 endpoint_idx, const void *data, u32 size_in_bytes);
+typedef s32(*HCI_Bulk_Read)(void *controller_impl, u8 device_idx, u8 endpoint_idx, void *data, u32 size_in_bytes);
 
 /**
  * Abstraction layer over the different Host Controller Interfaces.
