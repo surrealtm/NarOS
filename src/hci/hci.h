@@ -5,7 +5,10 @@
 typedef enum HCI_Device_Speed {
     HCI_DEVICE_SPEED_Full  = 0,
     HCI_DEVICE_SPEED_Low   = 1,
-    HCI_DEVICE_SPEED_Error = 2,
+    HCI_DEVICE_SPEED_High  = 2,
+    HCI_DEVICE_SPEED_Super = 3,
+    HCI_DEVICE_SPEED_Super_Plus = 4,
+    HCI_DEVICE_SPEED_Error = 5,
 } HCI_Device_Speed;
 
 typedef enum HCI_Direction {

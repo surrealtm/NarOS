@@ -1,11 +1,9 @@
 #include "usb.h"
 #include "usb/scsi.h"
 
-#include "output.h" // @Temporary: Only for printing the file content
-
 #define INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
-#define USB_MAX_DEVICES 1
+#define USB_MAX_DEVICES 8
 
 typedef enum USB_Descriptor_Type {
     USB_DESCRIPTOR_TYPE_Device = 0x1,
@@ -159,6 +157,10 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
     const u8 initial_length = 8; // The first request is limited to 8 bytes. With that information we can configure the HCI, and afterwards do arbitrary reads
 
     USB_Device_Descriptor descriptor = { 0 };
+    const HCI_Device_Speed speed = hci_get_port_speed(&device->hci, port_idx);
+    if(speed == HCI_DEVICE_SPEED_Error) {
+        return false;
+    }
 
     USB_Request_Packet get_descriptor = {
         .header = request_header(USB_REQUEST_DIRECTION_Device_To_Host, USB_REQUEST_TYPE_Standard, USB_REQUEST_RECIPIENT_Device),
@@ -168,7 +170,7 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
         .length = initial_length,
     };
 
-    if(!hci_configure_device(&device->hci, device_idx, hci_get_port_speed(&device->hci, port_idx))) {
+    if(!hci_configure_device(&device->hci, device_idx, speed)) {
         return false;
     }
 
@@ -186,7 +188,7 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
         return false;
     }
 
-    if(!hci_configure_device(&device->hci, device->address, hci_get_port_speed(&device->hci, port_idx))) {
+    if(!hci_configure_device(&device->hci, device->address, speed)) {
         return false;
     }
 
@@ -207,6 +209,7 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
 
     for(u16 payload_offset_in_bytes = 0; payload_offset_in_bytes + sizeof(USB_Descriptor_Header) <= payload_size_in_bytes;) {
         const USB_Descriptor_Header *header = (USB_Descriptor_Header *) (&payload[payload_offset_in_bytes]);
+        if(header->length < sizeof(*header) || header->length > payload_size_in_bytes - payload_offset_in_bytes) return false;
         payload_offset_in_bytes += header->length;
 
         switch(header->descriptor_type) {
@@ -336,29 +339,6 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
     }
 
     if(!configure_device(device)) {
-        return false;
-    }
-
-    SCSI_Inquiry inquiry = { 0 };
-    if(!scsi_inquire(device, &inquiry)) {
-        return false;
-    }
-
-    SCSI_Read_Capacity capacity = { 0 };
-    if(!scsi_read_capacity(device, &capacity)) {
-        return false;
-    }
-
-    char buffer[capacity.block_size_in_bytes];
-    if(!scsi_read(device, 0, align(sizeof(buffer), capacity.block_size_in_bytes), buffer)) {
-        return false;
-    }
-
-    os_output_print(str8(buffer));
-
-    const char *text = "Hello from the kernel";
-    move_memory(buffer, text, cstring_length(text));
-    if(!scsi_write(device, 1, 1, buffer)) {
         return false;
     }
 

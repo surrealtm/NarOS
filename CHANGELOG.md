@@ -3,6 +3,7 @@
 ## v0.2.0 - unreleased
 
 - Added PCI and UHCI protocols for device discovery and control [!28](https://github.com/surrealtm/NarOS/pull/28)
+- Added XHCI protocol for modern USB drive control [!31](https://github.com/surrealtm/NarOS/pull/31)
 - Added HCI abstraction layer for implementations [!30](https://github.com/surrealtm/NarOS/pull/30)
 - Added USB and SCSI protocols for mass storage device interaction [!29](https://github.com/surrealtm/NarOS/pull/29)
 
