@@ -10,7 +10,7 @@
 
 static
 char character_from_digit(const u8 digit) {
-    if (digit >= 0 && digit <= 9) {
+    if (digit <= 9) {
         return '0' + digit;
     } else if (digit >= 10 && digit <= 16) {
         return 'a' + digit;
@@ -91,11 +91,40 @@ void print_unsigned_int(Print_Buffer *buffer, unsigned int value) {
 }
 
 static
+void print_signed_int(Print_Buffer *buffer, const signed int signed_value) {
+    unsigned int unsigned_value = (unsigned int) signed_value;
+
+    if (signed_value < 0) {
+        print_character(buffer, '-');
+        unsigned_value = -signed_value;
+    }
+
+    print_unsigned_int(buffer, unsigned_value);
+}
+
+static
+void print_string(Print_Buffer *buffer, const Str8 string) {
+    for (s32 i = 0; i < string.count; ++i) {
+        print_character(buffer, string.data[i]);
+    }
+}
+
+static
 void print_data_type(Print_Buffer *buffer, const char data_type, va_list *arguments) {
     switch(data_type) {
         case 'u': {
             const unsigned int value = va_arg(*arguments, unsigned int);
             print_unsigned_int(buffer, value);
+        } break;
+
+        case 'd': {
+            const signed int value = va_arg(*arguments, signed int);
+            print_signed_int(buffer, value);
+        } break;
+
+        case 's': {
+            const Str8 value = va_arg(*arguments, Str8);
+            print_string(buffer, value);
         } break;
     }
 }
