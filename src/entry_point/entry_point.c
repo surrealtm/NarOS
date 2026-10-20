@@ -2,6 +2,7 @@
 #include "display.h"
 #include "ctrl.h"
 #include "input.h"
+#include "output.h"
 
 #include "acpi/acpi.h"
 #include "ctrl/ctrl_kernel.h"
@@ -27,6 +28,9 @@ int kernel_entry_point(const Boot_Info boot_info) {
     input_initialize();
     acpi_initialize();
     pci_initialize();
+
+    os_output_print(str8("This is a formatted print output!\n"));
+
     terminal_run();
     os_ctrl_shut_down();
     return 0;
