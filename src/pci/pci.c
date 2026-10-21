@@ -80,7 +80,7 @@ void initialize_usb_devices(const HCI_Controller controller, const u32 pci_addre
     const s32 port_capacity = hci_get_port_capacity(&controller);
     for(u8 port_idx = 0; port_idx < port_capacity; ++port_idx) {
         if(hci_reset_and_enable_port(&controller, port_idx)) {
-            USB_Device *device = usb_allocate_device();
+            struct USB_Device *device = usb_allocate_device();
             if(device) {
                 usb_initialize_device(device, controller, port_idx);
             }

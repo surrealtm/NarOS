@@ -205,8 +205,6 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
     const USB_Configuration_Descriptor *configuration_descriptor = (USB_Configuration_Descriptor *) payload;
     device->configuration_value = configuration_descriptor->configuration_value;
 
-    b8 in_mass_storage_interface = false;
-
     for(u16 payload_offset_in_bytes = 0; payload_offset_in_bytes + sizeof(USB_Descriptor_Header) <= payload_size_in_bytes;) {
         const USB_Descriptor_Header *header = (USB_Descriptor_Header *) (&payload[payload_offset_in_bytes]);
         if(header->length < sizeof(*header) || header->length > payload_size_in_bytes - payload_offset_in_bytes) return false;
@@ -215,38 +213,36 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
         switch(header->descriptor_type) {
             case USB_DESCRIPTOR_TYPE_Interface: {
                 const USB_Interface_Descriptor *interface = (USB_Interface_Descriptor *) header;
-                in_mass_storage_interface = !in_mass_storage_interface &&
-                    interface->alternate_setting == 0 &&
-                    interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage &&
-                    interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent &&
-                    interface->interface_protocol == USB_INTERFACE_PROTOCOL_Bulk_Only;
 
-                if(in_mass_storage_interface) {
-                    device->mass_storage_interface = interface->interface_number;
+                if (interface->alternate_setting == 0 && interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage && interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent && interface->interface_protocol == USB_INTERFACE_PROTOCOL_Bulk_Only) {
+                    device->mass_storage.supported = true;
+                    device->mass_storage.interface_number = interface->interface_number;
                 }
             } break;
 
             case USB_DESCRIPTOR_TYPE_Endpoint: {
                 const USB_Endpoint_Descriptor *endpoint = (USB_Endpoint_Descriptor *) header;
-                if(!in_mass_storage_interface) break;
 
-                const u16 packet_size_mask = 0x07ff;
-                const u16 packet_size = (endpoint->maximum_packet_size & packet_size_mask);
-                const u8 endpoint_number = endpoint->address.endpoint_number;
-                if(endpoint->attributes.transfer_type != USB_TRANSFER_TYPE_Bulk || endpoint_number == 0 || packet_size == 0) break;
+                if (device->mass_storage.supported && endpoint->attributes.transfer_type == USB_TRANSFER_TYPE_Bulk) {
+                    const u16 packet_size_mask = 0x07ff;
+                    const u16 packet_size = (endpoint->maximum_packet_size & packet_size_mask);
+                    const u8 endpoint_number = endpoint->address.endpoint_number;
 
-                if(endpoint->address.direction == USB_ENDPOINT_DIRECTION_In) {
-                    device->bulk_in_endpoint = endpoint_number;
-                    device->bulk_in_packet_size = packet_size;
-                } else {
-                    device->bulk_out_endpoint = endpoint_number;
-                    device->bulk_out_packet_size = packet_size;
+                    if (endpoint_number == 0 || packet_size == 0) {
+                        // Invalid endpoint, ignore
+                    } else if (endpoint->address.direction == USB_ENDPOINT_DIRECTION_In) {
+                        device->mass_storage.bulk_in_endpoint = endpoint_number;
+                        device->mass_storage.bulk_in_packet_size = packet_size;
+                    } else {
+                        device->mass_storage.bulk_out_endpoint = endpoint_number;
+                        device->mass_storage.bulk_out_packet_size = packet_size;
+                    }
                 }
             } break;
         }
     }
 
-    return device->bulk_in_endpoint != INVALID_ENDPOINT && device->bulk_out_endpoint != INVALID_ENDPOINT;
+    return true;
 }
 
 static
@@ -291,7 +287,7 @@ b8 configure_device(USB_Device *device) {
     //
     // Parse the endpoint configuration for this device
     //
-    if(!parse_configuration_payload(device, payload, configuration_descriptor.total_length)) {
+    if (!parse_configuration_payload(device, payload, configuration_descriptor.total_length)) {
         return false;
     }
 
@@ -308,9 +304,15 @@ b8 configure_device(USB_Device *device) {
         return false;
     }
 
-    if(!hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_in_endpoint, HCI_DIRECTION_In, device->bulk_in_packet_size) ||
-        !hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_out_endpoint, HCI_DIRECTION_Out, device->bulk_out_packet_size)) {
-        return false;
+    //
+    // Configure the endpoints for each supported feature of the USB device
+    //
+
+    if (device->mass_storage.supported) {
+        if(!hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_in_endpoint, HCI_DIRECTION_In, device->mass_storage.bulk_in_packet_size) ||
+            !hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, HCI_DIRECTION_Out, device->mass_storage.bulk_out_packet_size)) {
+            return false;
+        }
     }
 
     return true;
@@ -328,10 +330,8 @@ USB_Device *usb_allocate_device(void) {
 
 b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_idx) {
     *device = (USB_Device) {
-        .hci               = hci,
-        .address           = port_idx + 1,
-        .bulk_in_endpoint  = INVALID_ENDPOINT,
-        .bulk_out_endpoint = INVALID_ENDPOINT,
+        .hci     = hci,
+        .address = port_idx + 1,
     };
 
     if(!configure_host_endpoints(device, port_idx)) {
