@@ -3,6 +3,21 @@
 #include "base.h"
 #include "hci/hci.h"
 
+typedef enum USB_Interface {
+    USB_INTERFACE_Mass_Storage,
+    USB_INTERFACE_Keyboard,
+    USB_INTERFACE_COUNT,
+} USB_Interface;
+
+typedef struct USB_Keyboard_Interface {
+    b8 supported;
+    u8 interface_number;
+    u8 interrupt_in_endpoint;
+    u16 interrupt_in_packet_size;
+    u8 interval;
+    u8 previous_report[8];
+} USB_Keyboard_Interface;
+
 typedef struct USB_Mass_Storage_Interface {
     b8 supported;
     u8 interface_number;
@@ -17,6 +32,7 @@ typedef struct USB_Device {
     u8 address;
     u8 configuration_value;
     USB_Mass_Storage_Interface mass_storage;
+    USB_Keyboard_Interface keyboard;
 } USB_Device;
 
 /**
