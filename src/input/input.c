@@ -13,18 +13,13 @@ typedef struct Event_Buffer {
 } Event_Buffer;
 
 typedef struct Keyboard_State {
-    b8 left_control_down;
-    b8 right_control_down;
-    b8 left_shift_down;
-    b8 right_shift_down;
-    b8 caps_lock_active;
-    b8 right_alt_down;
-    b8 in_escaped_mode;
+    OS_Input_Keyboard_Layout layout;
+    OS_Input_Keyboard_Modifiers modifiers;
+    b8 keys[OS_INPUT_KEY_COUNT];
 } Keyboard_State;
 
-static Event_Buffer event_buffer;
-static Keyboard_State keyboard_state;
-static const Scan_Code_Table * active_scan_code_table = &scan_code_table_de;
+static Event_Buffer event_buffer = { 0 };
+static Keyboard_State keyboard_state = { 0 };
 
 static
 u32 advance_index(const u32 idx) {
@@ -40,20 +35,9 @@ OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
 }
 
 static
-OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
-    if(keyboard_state.right_alt_down) {
-        return mapping.alt;
-    } else if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) {
-        return mapping.shift;
-    } else {
-        return mapping.normal;
-    }
-}
-
-static
-char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_down) {
+char utf32_from_key_code(const OS_Input_Key_Code key_code) {
     const u32 utf32 = utf32_from_keycode[key_code];
-    if(shift_down) {
+    if(keyboard_state.modifiers & OS_INPUT_KEYBOARD_MODIFIERS_Shift) {
         return utf32;
     }
     if(utf32 >= 'A' && utf32 <= 'Z') {
@@ -65,60 +49,7 @@ char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_d
     return utf32;
 }
 
-static
-OS_Input_Keyboard_Modifiers get_keyboard_modifiers(void) {
-    OS_Input_Keyboard_Modifiers mods = 0x0;
-    if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Shift;
-    if(keyboard_state.left_control_down || keyboard_state.right_control_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Control;
-    if(keyboard_state.right_alt_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt;
-    return mods;
-}
-
-static
-void keyboard_interrupt_handler(void) {
-    const u8 scan_code = port_read_u8(0x60);
-    const b8 down = (scan_code & 0x80) == 0;
-    const u8 normalized_scan_code = scan_code & 0x7f;
-
-    if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
-        const Scan_Code_Mapping *active_table = (keyboard_state.in_escaped_mode) ? active_scan_code_table->escaped : active_scan_code_table->ordinary;
-        const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
-        const OS_Input_Keyboard_Modifiers mods = get_keyboard_modifiers();
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, mods, read_ascii_from_key_code(key_code, !!(mods & OS_INPUT_KEYBOARD_MODIFIERS_Shift)), down };
-        input_push_event(make_keyboard_event(keyboard_event));
-
-        switch(key_code) {
-            case OS_INPUT_KEY_Left_Control:
-                keyboard_state.left_control_down = down;
-                break;
-            case OS_INPUT_KEY_Right_Control:
-                keyboard_state.right_control_down = down;
-                break;
-            case OS_INPUT_KEY_Left_Shift:
-                keyboard_state.left_shift_down = down;
-                break;
-            case OS_INPUT_KEY_Right_Shift:
-                keyboard_state.right_shift_down = down;
-                break;
-            case OS_INPUT_KEY_Caps_Lock:
-                if(down) {
-                    keyboard_state.caps_lock_active = !keyboard_state.caps_lock_active;
-                }
-                break;
-            case OS_INPUT_KEY_Right_Alt:
-                keyboard_state.right_alt_down = down;
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    keyboard_state.in_escaped_mode = scan_code == 0xe0;
-}
-
 void input_initialize(void) {
-    interrupt_register_callback(INTERRUPT_SIGNAL_Keyboard, keyboard_interrupt_handler);
 }
 
 void input_push_event(const OS_Input_Event event) {
@@ -134,24 +65,27 @@ void input_push_event(const OS_Input_Event event) {
 }
 
 void input_set_current_key_modifiers(const OS_Input_Keyboard_Modifiers modifiers) {
-    (void) modifiers;
+    keyboard_state.modifiers = modifiers;
 }
 
 void input_set_current_key_state(const OS_Input_Key_Code key_code, const b8 down) {
-    (void) key_code;
-    (void) down;
+    if (key_code < 0 || key_code >= ARRAY_COUNT(keyboard_state.keys)) return;
+
+    if (keyboard_state.keys[key_code] != down) {
+        const OS_Input_Keyboard_Event keyboard_event = {
+            .key_code = key_code,
+            .modifiers = keyboard_state.modifiers,
+            .utf32 = utf32_from_key_code(key_code),
+            .down = down,
+        };
+        input_push_event(make_keyboard_event(keyboard_event));
+    }
+
+    keyboard_state.keys[key_code] = down;
 }
 
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
-    switch(layout) {
-        case OS_INPUT_KEYBOARD_LAYOUT_Standard_US:
-            active_scan_code_table = &scan_code_table_en;
-            break;
-
-        case OS_INPUT_KEYBOARD_LAYOUT_German:
-            active_scan_code_table = &scan_code_table_de;
-            break;
-    }
+    keyboard_state.layout = layout;
 }
 
 b8 os_input_has_event(void) {

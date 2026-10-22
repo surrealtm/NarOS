@@ -32,5 +32,7 @@ void hid_parse_keyboard_report(const HID_Keyboard_Report report) {
         if (report.keys[key_idx] == 0) continue;
 
         // @Incomplete: Convert the hid code into a key code. What about different keyboard layouts?
+        input_set_current_key_state(OS_INPUT_KEY_A, true);
+        input_set_current_key_state(OS_INPUT_KEY_A, false);
     }
 }

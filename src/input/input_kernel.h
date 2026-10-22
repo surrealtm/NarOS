@@ -22,3 +22,8 @@ void input_set_current_key_modifiers(OS_Input_Keyboard_Modifiers modifiers);
  * if the key state has changed
  */
 void input_set_current_key_state(OS_Input_Key_Code key_code, b8 down);
+
+/**
+ * Returns true if the specified key is currently considered `down`
+ */
+b8 input_get_current_key_state(OS_Input_Key_Code key_code);
