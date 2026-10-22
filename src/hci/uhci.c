@@ -14,12 +14,13 @@
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
-#define TRANSFER_DESCRIPTOR_ADDRESS(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
-#define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
+#define LINK_ADDRESS_FROM_POINTER(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
+#define LINK_POINTER_FROM_ADDRESS(address) (VIRTUAL_ADDRESS(address << 4))
+
+#define UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY 32
 
 #define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
-#define UHCI_TRANSFER_DESCRIPTOR_CAPACITY 32
 #define UHCI_DEVICE_CAPACITY 128
 #define UHCI_PORT_CAPACITY 2
 #define UHCI_ENDPOINT_CAPACITY 16
@@ -66,7 +67,7 @@ typedef struct UHCI_Transfer_Descriptor_Link {
     UHCI_Memory_Structure_Type memory_structure_type : 1;
     u32 depth_first : 1;
     u32 reserved : 1;
-    u32 pointer : 28;
+    u32 address : 28;
 } UHCI_Transfer_Descriptor_Link;
 
 typedef struct UHCI_Transfer_Descriptor_Status {
@@ -108,7 +109,7 @@ typedef struct UHCI_Frame_List_Entry {
     u32 terminate : 1;
     UHCI_Memory_Structure_Type memory_structure_type : 1;
     u32 reserved : 2;
-    u32 pointer : 28;
+    u32 address : 28;
 } UHCI_Frame_List_Entry;
 
 typedef struct UHCI_Queue_Head {
@@ -138,7 +139,7 @@ typedef struct UHCI_Controller {
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 
     UHCI_Queue_Head bulk_queue_head;
-    UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_TRANSFER_DESCRIPTOR_CAPACITY];
+    UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY];
     u32 active_bulk_transfer_descriptors;
 } UHCI_Controller;
 
@@ -339,13 +340,13 @@ UHCI_Device *find_device(UHCI_Controller *controller, const u8 device_idx) {
 
 static
 void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Packet_Type packet_type, const u32 requested_length, const void *data) {
-    assert(controller->active_bulk_transfer_descriptors < UHCI_TRANSFER_DESCRIPTOR_CAPACITY, "Reached the capacity of the UHCI bulk transfer descriptor list.");
+    assert(controller->active_bulk_transfer_descriptors < ARRAY_COUNT(controller->bulk_transfer_descriptors), "Reached the capacity of the UHCI bulk transfer descriptor list.");
 
     const UHCI_Device *device = find_device(controller, device_idx);
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
 
     if(controller->active_bulk_transfer_descriptors > 0) {
-        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors]) };
+        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors]) };
         controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors - 1].link = link;
     }
 
@@ -376,7 +377,7 @@ void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, 
 
 static
 void update_bulk_queue_head_pointer(UHCI_Controller *controller, const s32 transfer_descriptor_idx) {
-    controller->bulk_queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->bulk_transfer_descriptors[transfer_descriptor_idx]) };
+    controller->bulk_queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_transfer_descriptors[transfer_descriptor_idx]) };
     memory_barrier(); // Make sure the hardware sees this change before continuing with the execution
 }
 
@@ -400,7 +401,7 @@ s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_i
     //
     b8 successful = true;
     while(successful && !controller->bulk_queue_head.vertical_pointer.terminate) {
-        const UHCI_Transfer_Descriptor *current_descriptor = TRANSFER_DESCRIPTOR_POINTER(controller->bulk_queue_head.vertical_pointer.pointer);
+        const UHCI_Transfer_Descriptor *current_descriptor = LINK_POINTER_FROM_ADDRESS(controller->bulk_queue_head.vertical_pointer.address);
         if(transfer_descriptor_has_error(current_descriptor)) {
             successful = false;
             set_data_toggle(endpoint, direction_for_packet_type(current_descriptor->packet_header.packet_type), current_descriptor->packet_header.data_toggle);
@@ -492,7 +493,7 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     clear_bulk_queue(controller);
 
     for (u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        controller->frame_list[i] = (UHCI_Frame_List_Entry) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->bulk_queue_head) };
+        controller->frame_list[i] = (UHCI_Frame_List_Entry) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_queue_head) };
     }
 
     issue_command(controller, UHCI_COMMAND_Halt);
