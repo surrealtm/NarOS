@@ -4,6 +4,10 @@ b8 hci_initialize_controller(const HCI_Controller *controller, const u32 pci_add
     return controller->initialize_controller(controller->controller_impl, pci_address);
 }
 
+b8 hci_initialize_keyboard_report(const HCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx) {
+    return controller->initialize_keyboard_report(controller->controller_impl, device_idx, endpoint_idx);
+}
+
 s32 hci_get_port_capacity(const HCI_Controller *controller) {
     return controller->get_port_capacity(controller->controller_impl);
 }

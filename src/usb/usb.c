@@ -433,7 +433,10 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
         return false;
     }
 
-    if(device->keyboard.supported) os_output_print(str8("Detected a keyboard device!\n"));
+    if(device->keyboard.supported) {
+        os_output_print(str8("Detected a keyboard device!\n"));
+        hci_initialize_keyboard_report(&device->hci, device->keyboard.interface_number, device->keyboard.interrupt_in_endpoint);
+    }
 
     return true;
 }

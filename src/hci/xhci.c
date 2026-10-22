@@ -359,6 +359,15 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
     return wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Halted, false);
 }
 
+static
+b8 xhci_initialize_keyboard_report(const XHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx) {
+    (void) controller;
+    (void) device_idx;
+    (void) endpoint_idx;
+    // @Incomplete: Keyboard report handling on xhci
+    return false;
+}
+
 static s32 xhci_get_port_capacity(const XHCI_Controller *controller) { return controller->port_count; }
 
 static
@@ -584,6 +593,7 @@ XHCI_Controller *xhci_allocate_controller(void) {
 HCI_Controller hci_controller_from_xhci(XHCI_Controller *xhci) {
     return (HCI_Controller) { xhci,
         (HCI_Initialize_Controller) xhci_initialize_controller,
+        (HCI_Initialize_Keyboard_Report) xhci_initialize_keyboard_report,
         (HCI_Get_Port_Capacity) xhci_get_port_capacity,
         (HCI_Get_Port_Speed) xhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) xhci_reset_and_enable_port,

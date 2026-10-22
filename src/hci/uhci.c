@@ -139,8 +139,12 @@ typedef struct UHCI_Controller {
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 
     UHCI_Queue_Head bulk_queue_head;
-    UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY];
+    UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY] ALIGN_DECLARATION(16);
     u32 active_bulk_transfer_descriptors;
+
+    UHCI_Queue_Head interrupt_queue_head;
+    UHCI_Transfer_Descriptor interrupt_transfer_descriptor ALIGN_DECLARATION(16);
+    u8 keyboard_report[8] ALIGN_DECLARATION(16);
 } UHCI_Controller;
 
 static UHCI_Controller uhci_controllers[UHCI_MAX_CONTROLLERS];
@@ -517,6 +521,20 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
 }
 
 static
+b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device, const u8 endpoint) {
+    controller->interrupt_transfer_descriptor = (UHCI_Transfer_Descriptor) {
+        .link = { .terminate = true },
+        .status = { .active = true, .interrupt_on_complete = 1, .error_retry_counter = 3 },
+        .packet_header = { UHCI_PACKET_In, .device = device, .endpoint = endpoint, .data_toggle = 0, .requested_length = sizeof(controller->keyboard_report) },
+        .buffer_address = PHYSICAL_ADDRESS(&controller->keyboard_report),
+    };
+
+    // @Incomplete: Create the queue header and put that on the frame list.
+
+    return true;
+}
+
+static
 s32 uhci_get_port_capacity(const UHCI_Controller *controller) {
     (void) controller;
     return UHCI_PORT_CAPACITY;
@@ -634,6 +652,7 @@ HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
     return (HCI_Controller) {
         uhci,
         (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Initialize_Keyboard_Report) uhci_initialize_keyboard_report,
         (HCI_Get_Port_Capacity) uhci_get_port_capacity,
         (HCI_Get_Port_Speed) uhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,
