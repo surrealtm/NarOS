@@ -63,9 +63,10 @@ b8 take_device_ownership(const PCI_Device device) {
 static
 b8 enable_bus_master(const PCI_Device device, const u16 address_space_bit) {
     const u16 required_bits = PCI_COMMAND_BUS_MASTER | address_space_bit;
+    const u16 bit_mask = 0x1ff; // Force-clear the `interrupt disable` bit (index 10) to enable interrupts
     const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET);
     if((current_configuration & required_bits) == required_bits) return true;
-    pci_write_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET, current_configuration | required_bits);
+    pci_write_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET, (current_configuration | required_bits) & bit_mask);
     return (pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET) & required_bits) == required_bits;
 }
 

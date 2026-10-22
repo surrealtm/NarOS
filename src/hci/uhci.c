@@ -2,6 +2,7 @@
 #include "base.h"
 #include "ctrl.h"
 #include "port/port.h"
+#include "interrupt/interrupt.h"
 
 #define UHCI_MAX_CONTROLLERS 1
 
@@ -47,6 +48,15 @@ typedef enum UHCI_Memory_Structure_Type {
     UHCI_MEMORY_STRUCTURE_Transfer_Descriptor = 0x0,
     UHCI_MEMORY_STRUCTURE_Queue_Head          = 0x1,
 } UHCI_Memory_Structure_Type;
+
+typedef enum UHCI_Controller_Status {
+    UHCI_CONTROLLER_STATUS_Usb_Interrupt         = 1 << 0,
+    UHCI_CONTROLLER_STATUS_Error                 = 1 << 1,
+    UHCI_CONTROLLER_STATUS_Resume                = 1 << 2,
+    UHCI_CONTROLLER_STATUS_Host_System_Error     = 1 << 3,
+    UHCI_CONTROLLER_STATUS_Host_Controller_Error = 1 << 4,
+    UHCI_CONTROLLER_STATUS_Halted                = 1 << 5,
+} UHCI_Controller_Status;
 
 typedef enum UHCI_Port_Status {
     UHCI_PORT_STATUS_Currently_Connected = 1 << 0,
@@ -218,13 +228,28 @@ b8 wait_for_status(const UHCI_Controller *controller, Status_Check check) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static inline
+UHCI_Controller_Status read_controller_status(const UHCI_Controller *controller) {
+    return port_read_u16(controller->pci_address + 0x02);
+}
+
+static inline
+void clear_controller_status(const UHCI_Controller *controller, const UHCI_Controller_Status status) {
+    port_write_u16(controller->pci_address + 0x02, status);
+}
+
+static inline
 b8 is_halted(const UHCI_Controller *controller) {
-    return (port_read_u16(controller->pci_address + 0x02) & (1 << 5)) != 0;
+    return (read_controller_status(controller) & UHCI_CONTROLLER_STATUS_Halted) != 0;
 }
 
 static inline
 b8 is_host_reset(const UHCI_Controller *controller) {
     return (port_read_u16(controller->pci_address + 0x00) & (1 << 1)) == 0;
+}
+
+static inline
+void enable_uhci_interrupts(const UHCI_Controller *controller) {
+    port_write_u16(controller->pci_address + 0x04, 0x4);
 }
 
 static inline
@@ -515,10 +540,23 @@ void poll_keyboard_report(UHCI_Controller *controller) {
     if (controller->keyboard_transfer_descriptor.status.active) return; // No data has been filled in yet from the hardware
 
     if (controller->keyboard_report[0x2] != 0) {
-        memory_barrier();
+        // @Incomplete: Parse the keyboard report in a HID module and create input events.
     }
 
     enqueue_keyboard_report(controller);
+}
+
+static
+void uhci_interrupt(void) {
+    for (u32 i = 0; i < uhci_controller_count; ++i) {
+        UHCI_Controller *controller = &uhci_controllers[i];
+        const UHCI_Controller_Status status = read_controller_status(controller);
+
+        if ((status & UHCI_CONTROLLER_STATUS_Usb_Interrupt) != 0) {
+            poll_keyboard_report(&uhci_controllers[i]);
+            clear_controller_status(controller, status);
+        }
+    }
 }
 
 
@@ -577,11 +615,8 @@ b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device_
     controller->keyboard_device_idx = device_idx;
     controller->keyboard_endpoint_idx = endpoint_idx;
     enqueue_keyboard_report(controller);
-
-    while (true) {
-        poll_keyboard_report(controller);
-    }
-
+    interrupt_register_callback(INTERRUPT_SIGNAL_UHCI, uhci_interrupt);
+    enable_uhci_interrupts(controller);
     return true;
 }
 

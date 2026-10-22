@@ -3,6 +3,7 @@
 [global interrupt_dummy_slave]
 [global interrupt_20]
 [global interrupt_21]
+[global interrupt_2b]
 
 ; The interrupt procedures are installed by the kernel into the Interrupt Descriptor Table.
 ; When an exception / interrupt occurs, these assembly procedures are invoked by the CPU.
@@ -43,6 +44,12 @@ interrupt_21:
     cli
     push byte 0
     push byte 0x21
+    jmp interrupt_dispatch
+
+interrupt_2b:
+    cli
+    push byte 0
+    push byte 0x2b
     jmp interrupt_dispatch
 
 interrupt_dispatch:

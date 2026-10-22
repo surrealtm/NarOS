@@ -32,19 +32,6 @@ u32 advance_index(const u32 idx) {
 }
 
 static
-void push_event(const OS_Input_Event event) {
-    event_buffer.data[event_buffer.write_idx] = event;
-    event_buffer.write_idx = advance_index(event_buffer.write_idx);
-    if(event_buffer.read_idx == event_buffer.write_idx) {
-        // We've caught back up to the read index, as the reader was too slow.
-        // The new value in the `read_idx` is now the *latest* event, but the read index should
-        // point at the oldest event in the queue, therefore we forcefully advance the read index here -
-        // basically implicitly popping the last event from the queue
-        event_buffer.read_idx = advance_index(event_buffer.read_idx);
-    }
-}
-
-static
 OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
     OS_Input_Event event;
     event.kind = OS_INPUT_EVENT_KIND_Keyboard;
@@ -98,7 +85,7 @@ void keyboard_interrupt_handler(void) {
         const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
         const OS_Input_Keyboard_Modifiers mods = get_keyboard_modifiers();
         const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, mods, read_ascii_from_key_code(key_code, !!(mods & OS_INPUT_KEYBOARD_MODIFIERS_Shift)), down };
-        push_event(make_keyboard_event(keyboard_event));
+        input_push_event(make_keyboard_event(keyboard_event));
 
         switch(key_code) {
             case OS_INPUT_KEY_Left_Control:
@@ -132,6 +119,18 @@ void keyboard_interrupt_handler(void) {
 
 void input_initialize(void) {
     interrupt_register_callback(INTERRUPT_SIGNAL_Keyboard, keyboard_interrupt_handler);
+}
+
+void input_push_event(const OS_Input_Event event) {
+    event_buffer.data[event_buffer.write_idx] = event;
+    event_buffer.write_idx = advance_index(event_buffer.write_idx);
+    if(event_buffer.read_idx == event_buffer.write_idx) {
+        // We've caught back up to the read index, as the reader was too slow.
+        // The new value in the `read_idx` is now the *latest* event, but the read index should
+        // point at the oldest event in the queue, therefore we forcefully advance the read index here -
+        // basically implicitly popping the last event from the queue
+        event_buffer.read_idx = advance_index(event_buffer.read_idx);
+    }
 }
 
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {

@@ -37,6 +37,7 @@ extern void interrupt_dummy_master(void);
 extern void interrupt_dummy_slave(void);
 extern void interrupt_20(void);
 extern void interrupt_21(void);
+extern void interrupt_2b(void);
 
 static
 void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 segment, const u8 flags) {
@@ -88,6 +89,7 @@ void setup_interrupt_descriptor_table(void) {
     // Install the interrupt handlers we actually care about. Only these will result in a call to `interrupt_handler`.
     install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
     install_interrupt_descriptor(0x21, (u32) interrupt_21, segment, flags);
+    install_interrupt_descriptor(0x2b, (u32) interrupt_2b, segment, flags);
 }
 
 static
