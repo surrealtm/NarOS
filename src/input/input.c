@@ -133,6 +133,15 @@ void input_push_event(const OS_Input_Event event) {
     }
 }
 
+void input_set_current_key_modifiers(const OS_Input_Keyboard_Modifiers modifiers) {
+    (void) modifiers;
+}
+
+void input_set_current_key_state(const OS_Input_Key_Code key_code, const b8 down) {
+    (void) key_code;
+    (void) down;
+}
+
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
     switch(layout) {
         case OS_INPUT_KEYBOARD_LAYOUT_Standard_US:

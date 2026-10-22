@@ -1,8 +1,9 @@
 #include "uhci.h"
 #include "base.h"
 #include "ctrl.h"
-#include "port/port.h"
 #include "interrupt/interrupt.h"
+#include "port/port.h"
+#include "usb/hid.h"
 
 #define UHCI_MAX_CONTROLLERS 1
 
@@ -154,7 +155,7 @@ typedef struct UHCI_Controller {
 
     UHCI_Queue_Head keyboard_queue_head;
     UHCI_Transfer_Descriptor keyboard_transfer_descriptor ALIGN_DECLARATION(16);
-    u8 keyboard_report[8] ALIGN_DECLARATION(16);
+    HID_Keyboard_Report keyboard_report;
     u8 keyboard_device_idx;
     u8 keyboard_endpoint_idx;
 } UHCI_Controller;
@@ -535,14 +536,11 @@ void enqueue_keyboard_report(UHCI_Controller *controller) {
     memory_barrier();
 }
 
-static
+static inline
 void poll_keyboard_report(UHCI_Controller *controller) {
     if (controller->keyboard_transfer_descriptor.status.active) return; // No data has been filled in yet from the hardware
 
-    if (controller->keyboard_report[0x2] != 0) {
-        // @Incomplete: Parse the keyboard report in a HID module and create input events.
-    }
-
+    hid_parse_keyboard_report(controller->keyboard_report);
     enqueue_keyboard_report(controller);
 }
 
