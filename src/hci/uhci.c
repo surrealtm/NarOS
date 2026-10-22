@@ -142,9 +142,11 @@ typedef struct UHCI_Controller {
     UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY] ALIGN_DECLARATION(16);
     u32 active_bulk_transfer_descriptors;
 
-    UHCI_Queue_Head interrupt_queue_head;
-    UHCI_Transfer_Descriptor interrupt_transfer_descriptor ALIGN_DECLARATION(16);
+    UHCI_Queue_Head keyboard_queue_head;
+    UHCI_Transfer_Descriptor keyboard_transfer_descriptor ALIGN_DECLARATION(16);
     u8 keyboard_report[8] ALIGN_DECLARATION(16);
+    u8 keyboard_device_idx;
+    u8 keyboard_endpoint_idx;
 } UHCI_Controller;
 
 static UHCI_Controller uhci_controllers[UHCI_MAX_CONTROLLERS];
@@ -190,6 +192,11 @@ b8 transfer_descriptor_has_error(const UHCI_Transfer_Descriptor *descriptor) {
 static inline
 b8 transfer_descriptor_is_short_packet(const UHCI_Transfer_Descriptor *descriptor) {
     return !descriptor->status.active && descriptor->packet_header.packet_type == UHCI_PACKET_In && descriptor->status.short_packet_detect && (TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->status.transferred_length) < TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->packet_header.requested_length));
+}
+
+static inline
+UHCI_Queue_Head empty_queue_head(void) {
+    return (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = true }, (UHCI_Frame_List_Entry) { .terminate = true } };
 }
 
 typedef b8 (*Status_Check)(const UHCI_Controller *);
@@ -339,7 +346,7 @@ UHCI_Device *find_device(UHCI_Controller *controller, const u8 device_idx) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Transfer Descriptor Handling
+// Bulk Transfer Descriptor Handling
 // ---------------------------------------------------------------------------------------------------------------
 
 static
@@ -387,7 +394,7 @@ void update_bulk_queue_head_pointer(UHCI_Controller *controller, const s32 trans
 
 static
 void clear_bulk_queue(UHCI_Controller *controller) {
-    controller->bulk_queue_head = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = true }, (UHCI_Frame_List_Entry) { .terminate = true } };
+    controller->bulk_queue_head = empty_queue_head();
     memory_barrier();
 }
 
@@ -477,6 +484,45 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 
 
 // ---------------------------------------------------------------------------------------------------------------
+// Keyboard Report Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+void clear_keyboard_queue(UHCI_Controller *controller) {
+    controller->keyboard_queue_head = empty_queue_head();
+    memory_barrier();
+}
+
+static
+void enqueue_keyboard_report(UHCI_Controller *controller) {
+    const HCI_Direction direction = HCI_DIRECTION_In;
+    UHCI_Endpoint *endpoint = find_endpoint(controller, controller->keyboard_device_idx, controller->keyboard_endpoint_idx);
+
+    controller->keyboard_transfer_descriptor = (UHCI_Transfer_Descriptor) {
+        .link = { .terminate = true },
+        .status = { .active = true, .interrupt_on_complete = 1, .error_retry_counter = 3 },
+        .packet_header = { UHCI_PACKET_In, .device = controller->keyboard_device_idx, .endpoint = controller->keyboard_endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, direction), .requested_length = sizeof(controller->keyboard_report) },
+        .buffer_address = PHYSICAL_ADDRESS(&controller->keyboard_report),
+    };
+
+    controller->keyboard_queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->keyboard_transfer_descriptor) };
+
+    memory_barrier();
+}
+
+static
+void poll_keyboard_report(UHCI_Controller *controller) {
+    if (controller->keyboard_transfer_descriptor.status.active) return; // No data has been filled in yet from the hardware
+
+    if (controller->keyboard_report[0x2] != 0) {
+        memory_barrier();
+    }
+
+    enqueue_keyboard_report(controller);
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------
 // HCI Interface
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -494,10 +540,16 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
         controller->ports[i] = (UHCI_Port) { .register_address = controller->pci_address + 0x10 + (i * 2), .connected = false };
     }
 
+    clear_keyboard_queue(controller);
     clear_bulk_queue(controller);
 
+    const UHCI_Frame_List_Entry to_bulk_queue = { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_queue_head) };
+    const UHCI_Frame_List_Entry to_keyboard_queue = { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->keyboard_queue_head) };
+
+    controller->keyboard_queue_head.horizontal_pointer = to_bulk_queue;
+
     for (u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        controller->frame_list[i] = (UHCI_Frame_List_Entry) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_queue_head) };
+        controller->frame_list[i] = to_keyboard_queue;
     }
 
     issue_command(controller, UHCI_COMMAND_Halt);
@@ -521,15 +573,14 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
 }
 
 static
-b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device, const u8 endpoint) {
-    controller->interrupt_transfer_descriptor = (UHCI_Transfer_Descriptor) {
-        .link = { .terminate = true },
-        .status = { .active = true, .interrupt_on_complete = 1, .error_retry_counter = 3 },
-        .packet_header = { UHCI_PACKET_In, .device = device, .endpoint = endpoint, .data_toggle = 0, .requested_length = sizeof(controller->keyboard_report) },
-        .buffer_address = PHYSICAL_ADDRESS(&controller->keyboard_report),
-    };
+b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx) {
+    controller->keyboard_device_idx = device_idx;
+    controller->keyboard_endpoint_idx = endpoint_idx;
+    enqueue_keyboard_report(controller);
 
-    // @Incomplete: Create the queue header and put that on the frame list.
+    while (true) {
+        poll_keyboard_report(controller);
+    }
 
     return true;
 }

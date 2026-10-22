@@ -425,17 +425,17 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
         },
     };
 
-    if(!configure_host_endpoints(device, port_idx)) {
+    if (!configure_host_endpoints(device, port_idx)) {
         return false;
     }
 
-    if(!configure_device(device)) {
+    if (!configure_device(device)) {
         return false;
     }
 
-    if(device->keyboard.supported) {
+    if (device->keyboard.supported) {
         os_output_print(str8("Detected a keyboard device!\n"));
-        hci_initialize_keyboard_report(&device->hci, device->keyboard.interface_number, device->keyboard.interrupt_in_endpoint);
+        hci_initialize_keyboard_report(&device->hci, device->address, device->keyboard.interrupt_in_endpoint);
     }
 
     return true;
