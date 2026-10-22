@@ -245,13 +245,19 @@ fi
 QEMU_USB_PARAMETERS=""
 if [[ ${DEBUG_QEMU} == true || ${RUN_QEMU} == true ]]; then
     echo " + Preparing the fake USB drive for QEMU..."
+
+    # Create the UHCI and XHCI controllers
+    QEMU_USB_PARAMETERS+=" -device piix3-usb-uhci,id=uhci -device qemu-xhci,id=xhci"
+
     # Create a temporary file that QEMU can mount as the disk content
     HOST_PATH="/tmp/qemu_usb_drive.img"
     dd if=/dev/zero of=${HOST_PATH} bs=1M count=16 >/dev/null 2>&1
     printf 'This is some text stored on the USB mass storage.\n' | dd of="${HOST_PATH}" conv=notrunc status=none
-    QEMU_USB_PARAMETERS="-drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device qemu-xhci,id=xhci -device usb-storage,drive=usbdisk"
+    QEMU_USB_PARAMETERS+=" -drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device usb-storage,drive=usbdisk"
+
+    # Mount a virtual keyboard through USB
     if [[ ${USB_KEYBOARD} == true ]]; then
-        QEMU_USB_PARAMETERS+=" -device usb-kbd,bus=xhci.0"
+        QEMU_USB_PARAMETERS+=" -device usb-kbd,bus=uhci.0"
     fi
 fi
 
