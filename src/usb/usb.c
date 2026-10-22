@@ -53,6 +53,10 @@ typedef enum USB_Transfer_Type {
     USB_TRANSFER_TYPE_Interrupt   = 0x3,
 } USB_Transfer_Type;
 
+typedef enum USB_Protocol {
+    USB_PROTOCOL_Boot = 0x0,
+} USB_Protocol;
+
 typedef enum USB_Request_Direction {
     USB_REQUEST_DIRECTION_Host_To_Device = 0x0,
     USB_REQUEST_DIRECTION_Device_To_Host = 0x1,
@@ -76,6 +80,7 @@ typedef enum USB_Request {
     USB_REQUEST_Set_Address       = 0x05,
     USB_REQUEST_Get_Descriptor    = 0x06,
     USB_REQUEST_Set_Configuration = 0x09,
+    USB_REQUEST_Set_Protocol      = 0x0b,
 } USB_Request;
 
 typedef struct USB_Request_Header {
@@ -367,12 +372,30 @@ b8 configure_device(USB_Device *device) {
     // Configure the endpoints for each supported feature of the USB device
     //
 
+    if (device->keyboard.supported) {
+        USB_Request_Packet set_protocol = {
+            .header = request_header(USB_REQUEST_DIRECTION_Host_To_Device, USB_REQUEST_TYPE_Class, USB_REQUEST_RECIPIENT_Interface),
+            .request = USB_REQUEST_Set_Protocol,
+            .index = device->keyboard.interface_number,
+            .value = USB_PROTOCOL_Boot,
+        };
+
+        if (hci_control_write(&device->hci, device->address, &set_protocol, sizeof(set_protocol), null, 0) != 0) {
+            return false;
+        }
+
+        if (!hci_configure_endpoint_direction(&device->hci, device->address, device->keyboard.interrupt_in_endpoint, HCI_DIRECTION_In, device->keyboard.interrupt_in_packet_size)) {
+            return false;
+        }
+    }
+
     if (device->mass_storage.supported) {
         if(!hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_in_endpoint, HCI_DIRECTION_In, device->mass_storage.bulk_in_packet_size) ||
             !hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, HCI_DIRECTION_Out, device->mass_storage.bulk_out_packet_size)) {
             return false;
         }
     }
+
 
     return true;
 }
