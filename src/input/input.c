@@ -1,6 +1,6 @@
 #include "input.h"
 #include "input_kernel.h"
-#include "scan_code_tables.h"
+#include "input/tables.h"
 #include "interrupt/interrupt.h"
 #include "port/port.h"
 
@@ -35,8 +35,8 @@ OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
 }
 
 static
-char utf32_from_key_code(const OS_Input_Key_Code key_code) {
-    const u32 utf32 = utf32_from_keycode[key_code];
+u32 utf32_from_key_code(const OS_Input_Key_Code key_code) {
+    const u32 utf32 = UTF32_FROM_KEY_CODE[key_code];
     if(keyboard_state.modifiers & OS_INPUT_KEYBOARD_MODIFIERS_Shift) {
         return utf32;
     }

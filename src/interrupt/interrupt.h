@@ -6,7 +6,6 @@ typedef void (*Interrupt_Callback)(void);
 
 typedef enum Interrupt_Signal {
     INTERRUPT_SIGNAL_Timer    = 0x20,
-    INTERRUPT_SIGNAL_Keyboard = 0x21, // @Cleanup: This is no longer supported after implementing usb keyboards
     INTERRUPT_SIGNAL_UHCI     = 0x2b, // This value is hardcoded since it works for Qemu, but for robustness it should be determined at run-time
 } Interrupt_Signal;
 
