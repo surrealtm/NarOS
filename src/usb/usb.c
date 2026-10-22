@@ -3,9 +3,11 @@
 
 #include "output.h"
 
-#define INVALID_ENDPOINT U8_MAX
+#define USB_INVALID_INTERFACE 0xff
+#define USB_INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
 #define USB_MAX_DEVICES 8
+
 
 typedef enum USB_Descriptor_Type {
     USB_DESCRIPTOR_TYPE_Device = 0x1,
@@ -213,12 +215,12 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
 
 static
 b8 validate_keyboard_interface(const USB_Keyboard_Interface *interface) {
-    return interface->interface_number != 0 && interface->interrupt_in_endpoint != 0 && interface->interrupt_in_packet_size != 0 && interface->interval != 0;
+    return interface->interface_number != USB_INVALID_INTERFACE && interface->interrupt_in_endpoint != USB_INVALID_ENDPOINT && interface->interrupt_in_packet_size != 0 && interface->interval != 0;
 }
 
 static
 b8 validate_mass_storage_interface(const USB_Mass_Storage_Interface *interface) {
-    return interface->interface_number != 0 && interface->bulk_in_endpoint != 0 && interface->bulk_out_endpoint != 0 && interface->bulk_in_packet_size != 0 && interface->bulk_out_packet_size != 0;
+    return interface->interface_number != USB_INVALID_INTERFACE && interface->bulk_in_endpoint != USB_INVALID_ENDPOINT && interface->bulk_out_endpoint != USB_INVALID_ENDPOINT && interface->bulk_in_packet_size != 0 && interface->bulk_out_packet_size != 0;
 }
 
 static
@@ -235,22 +237,26 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
 
         switch(header->descriptor_type) {
             case USB_DESCRIPTOR_TYPE_Interface: {
+                if (header->length < sizeof(USB_Interface_Descriptor)) return false;
                 const USB_Interface_Descriptor *interface = (USB_Interface_Descriptor *) header;
 
-                if (interface->alternate_setting != 0) break;
+                if (interface->interface_number >= configuration_descriptor->interface_count) return false;
 
-                if (interface->interface_class == USB_INTERFACE_CLASS_Human_Device_Interface && interface->interface_subclass == USB_INTERFACE_HID_SUBCLASS_Boot_Interface && interface->interface_protocol == USB_INTERFACE_HID_PROTOCOL_Keyboard) {
+                current_interface = USB_INTERFACE_COUNT;
+
+                if (interface->alternate_setting != 0) {
+                    // Invalid interface, ignore
+                } else if (interface->interface_class == USB_INTERFACE_CLASS_Human_Device_Interface && interface->interface_subclass == USB_INTERFACE_HID_SUBCLASS_Boot_Interface && interface->interface_protocol == USB_INTERFACE_HID_PROTOCOL_Keyboard) {
                     device->keyboard.interface_number = interface->interface_number;
                     current_interface = USB_INTERFACE_Keyboard;
-                }
-
-                if (interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage && interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent && interface->interface_protocol == USB_INTERFACE_MASS_STORAGE_PROTOCOL_Bulk_Only) {
+                } else if (interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage && interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent && interface->interface_protocol == USB_INTERFACE_MASS_STORAGE_PROTOCOL_Bulk_Only) {
                     device->mass_storage.interface_number = interface->interface_number;
                     current_interface = USB_INTERFACE_Mass_Storage;
                 }
             } break;
 
             case USB_DESCRIPTOR_TYPE_Endpoint: {
+                if (header->length < sizeof(USB_Endpoint_Descriptor)) return false;
                 const USB_Endpoint_Descriptor *endpoint = (USB_Endpoint_Descriptor *) header;
 
                 const u16 packet_size_mask = 0x07ff;
@@ -385,6 +391,15 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
     *device = (USB_Device) {
         .hci     = hci,
         .address = port_idx + 1,
+        .keyboard = {
+            .interface_number = USB_INVALID_INTERFACE,
+            .interrupt_in_endpoint = USB_INVALID_ENDPOINT,
+        },
+        .mass_storage = {
+            .interface_number  = USB_INVALID_INTERFACE,
+            .bulk_in_endpoint  = USB_INVALID_ENDPOINT,
+            .bulk_out_endpoint = USB_INVALID_ENDPOINT,
+        },
     };
 
     if(!configure_host_endpoints(device, port_idx)) {
