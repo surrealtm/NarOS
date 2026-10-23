@@ -40,9 +40,6 @@ static volatile u64 tick_counter = 0; // This is modified by an interrupt handle
 extern void interrupt_dummy_master(void);
 extern void interrupt_dummy_slave(void);
 
-extern void interrupt_20(void);
-extern void interrupt_2b(void);
-
 static
 void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 segment, const u8 flags) {
     interrupt_descriptor_table[signal] = (Interrupt_Descriptor_Table_Entry) { ((base >> 0) & 0xffff), segment, 0, flags, ((base >> 16) & 0xffff) };
@@ -91,8 +88,26 @@ void setup_interrupt_descriptor_table(void) {
     }
 
     // Install the interrupt handlers we actually care about. Only these will result in a call to `interrupt_handler`.
-    install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
-    install_interrupt_descriptor(0x2b, (u32) interrupt_2b, segment, flags);
+#define install(id) extern void interrupt_##id(void); install_interrupt_descriptor(0x##id, (u32) interrupt_##id, segment, flags)
+
+    install(20);
+    install(21);
+    install(22);
+    install(23);
+    install(24);
+    install(25);
+    install(26);
+    install(27);
+    install(28);
+    install(29);
+    install(2a);
+    install(2b);
+    install(2c);
+    install(2d);
+    install(2e);
+    install(2f);
+
+#undef install
 }
 
 static
@@ -140,7 +155,7 @@ void interrupt_initialize(void) {
 }
 
 void interrupt_register_callback(const u32 signal, const Interrupt_Callback callback) {
-    if (signal < 0 || signal >= ARRAY_COUNT(interrupt_callback_lists)) {
+    if (signal >= ARRAY_COUNT(interrupt_callback_lists)) {
         return;
     }
 
