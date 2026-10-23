@@ -68,11 +68,14 @@ s32 cmd_block_devices(void) {
     s32 device_count;
     const Block_Device *devices = block_device_enumerate(&device_count);
 
-    for(s32 device_idx = 0; device_idx < device_count; ++device_idx) {
+    for (s32 device_idx = 0; device_idx < device_count; ++device_idx) {
         const Block_Device *device = &devices[device_idx];
         Block_Device_Metadata metadata;
-        block_device_get_metadata(device, &metadata);
-        os_output_print(str8("Device: %s\n"), str8_from_array(metadata.device_name));
+        if (block_device_get_metadata(device, &metadata)) {
+            os_output_print(str8("Device: %s\n"), str8_from_array(metadata.device_name));
+        } else {
+            os_output_print(str8(" (Misconfigured device)\n"));
+        }
     }
 
     divider("Block Devices");

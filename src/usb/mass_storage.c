@@ -14,7 +14,7 @@ b8 get_metadata(const struct USB_Device *device, Block_Device_Metadata *result) 
     return true;
 }
 
-void mass_storage_maybe_register_block_device(const struct USB_Device *usb) {
+void mass_storage_register_block_device(const struct USB_Device *usb) {
     SCSI_Inquiry inquiry = { 0 };
     if (!scsi_inquire(usb, &inquiry)) return;
 

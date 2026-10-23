@@ -397,7 +397,6 @@ b8 configure_device(USB_Device *device) {
         }
     }
 
-
     return true;
 }
 
@@ -439,8 +438,7 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
     }
 
     if (device->mass_storage.supported) {
-        // @Cleanup: Get rid of the `maybe` in the name?
-        mass_storage_maybe_register_block_device(device);
+        mass_storage_register_block_device(device);
     }
 
     return true;
