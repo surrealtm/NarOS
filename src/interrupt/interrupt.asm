@@ -1,8 +1,6 @@
 [extern interrupt_handler]
 [global interrupt_dummy_master]
 [global interrupt_dummy_slave]
-[global interrupt_20]
-[global interrupt_21]
 
 ; The interrupt procedures are installed by the kernel into the Interrupt Descriptor Table.
 ; When an exception / interrupt occurs, these assembly procedures are invoked by the CPU.
@@ -33,17 +31,32 @@ interrupt_dummy_slave:
     popa
     iret
 
-interrupt_20:
+; Pass the vector as hexadecimal digits without 0x (for example, 20 or 2b).
+%macro interrupt_stub 1
+[global interrupt_%1]
+interrupt_%1:
     cli
     push byte 0
-    push byte 0x20
+    push byte 0x%+%1
     jmp interrupt_dispatch
+%endmacro
 
-interrupt_21:
-    cli
-    push byte 0
-    push byte 0x21
-    jmp interrupt_dispatch
+interrupt_stub 20
+interrupt_stub 21
+interrupt_stub 22
+interrupt_stub 23
+interrupt_stub 24
+interrupt_stub 25
+interrupt_stub 26
+interrupt_stub 27
+interrupt_stub 28
+interrupt_stub 29
+interrupt_stub 2a
+interrupt_stub 2b
+interrupt_stub 2c
+interrupt_stub 2d
+interrupt_stub 2e
+interrupt_stub 2f
 
 interrupt_dispatch:
     pusha

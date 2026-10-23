@@ -55,6 +55,12 @@ u32 get_bar_address(const PCI_Device device, const u8 bar_offset) {
 }
 
 static inline
+u8 get_interrupt_signal(const PCI_Device device) {
+    const u8 interrupt_line = pci_read_u16(device.bus, device.slot, device.function, 0x3c) & 0xff;
+    return interrupt_line < 16 ? (u8)(0x20 + interrupt_line) : 0;
+}
+
+static inline
 b8 take_device_ownership(const PCI_Device device) {
     pci_write_u16(device.bus, device.slot, device.function, 0xc0, 0x2000);
     return true;
@@ -63,9 +69,10 @@ b8 take_device_ownership(const PCI_Device device) {
 static
 b8 enable_bus_master(const PCI_Device device, const u16 address_space_bit) {
     const u16 required_bits = PCI_COMMAND_BUS_MASTER | address_space_bit;
+    const u16 bit_mask = 0x1ff; // Force-clear the `interrupt disable` bit (index 10) to enable interrupts
     const u16 current_configuration = pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET);
     if((current_configuration & required_bits) == required_bits) return true;
-    pci_write_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET, current_configuration | required_bits);
+    pci_write_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET, (current_configuration | required_bits) & bit_mask);
     return (pci_read_u16(device.bus, device.slot, device.function, PCI_COMMAND_OFFSET) & required_bits) == required_bits;
 }
 
@@ -74,13 +81,13 @@ b8 enable_bus_master(const PCI_Device device, const u16 address_space_bit) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-void initialize_usb_devices(const HCI_Controller controller, const u32 pci_address) {
-    if(!hci_initialize_controller(&controller, pci_address)) return; // This should be part of the hci allocation - if this fails, don't even allocate the controller itself
+void initialize_usb_devices(const HCI_Controller controller, const u32 pci_address, const u8 interrupt_signal) {
+    if(!hci_initialize_controller(&controller, pci_address, interrupt_signal)) return; // This should be part of the hci allocation - if this fails, don't even allocate the controller itself
 
     const s32 port_capacity = hci_get_port_capacity(&controller);
     for(u8 port_idx = 0; port_idx < port_capacity; ++port_idx) {
         if(hci_reset_and_enable_port(&controller, port_idx)) {
-            USB_Device *device = usb_allocate_device();
+            struct USB_Device *device = usb_allocate_device();
             if(device) {
                 usb_initialize_device(device, controller, port_idx);
             }
@@ -101,10 +108,11 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
     switch((Serial_Bus_USB_Controller_Program_Interface) device.interface) {
         case SERIAL_BUS_USB_CONTROLLER_UHCI: {
             const u32 pci_address = get_bar_address(device, UHCI_IOBAR_OFFSET);
+            const u8 interrupt_signal = get_interrupt_signal(device);
             struct UHCI_Controller *uhci = uhci_allocate_controller();
             if(uhci) {
                 if(take_device_ownership(device) && enable_bus_master(device, PCI_COMMAND_IO_SPACE)) {
-                    initialize_usb_devices(hci_controller_from_uhci(uhci), pci_address);
+                    initialize_usb_devices(hci_controller_from_uhci(uhci), pci_address, interrupt_signal);
                 }
             }
         } break;
@@ -116,6 +124,7 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
             }
 
             const u32 pci_address = bar & ~0xfu;
+            const u8 interrupt_signal = get_interrupt_signal(device);
             struct XHCI_Controller *xhci = xhci_allocate_controller();
             if(!xhci) {
                 break;
@@ -124,7 +133,7 @@ void initialize_serial_bus_usb_controller(const PCI_Device device) {
                 break;
             }
 
-            initialize_usb_devices(hci_controller_from_xhci(xhci), pci_address);
+            initialize_usb_devices(hci_controller_from_xhci(xhci), pci_address, interrupt_signal);
         } break;
     }
 }

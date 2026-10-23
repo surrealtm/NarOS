@@ -29,6 +29,7 @@ Build the NarOS kernel image.
 Options:
   --run            Run the built image with QEMU
   --debug          Debug the built image with GDB and QEMU
+  --usb-keyboard   Attach a USB keyboard to QEMU (with --run or --debug)
   --check-headers  Check that every header is self-contained
   --gcc            Build using GCC
   --clang          Build using Clang (default)
@@ -172,6 +173,7 @@ KERNEL_C_SOURCE_FILES=(
     "terminal/command_dispatch.c"
     "terminal/terminal.c"
     "terminal/text_input.c"
+    "usb/hid.c"
     "usb/usb.c"
     "usb/scsi.c"
 )
@@ -234,25 +236,38 @@ if [[ ${CHECK_HEADERS} == true ]]; then
 fi
 
 # ----------------------------------------------------------------------------------------------------------------
-# USB Drive for QEMU
+# USB Devices for QEMU
 # ----------------------------------------------------------------------------------------------------------------
-QEMU_USB_DRIVE_PARAMETERS=""
+QEMU_USB_PARAMETERS=""
 if [[ ${DEBUG_QEMU} == true || ${RUN_QEMU} == true ]]; then
     echo " + Preparing the fake USB drive for QEMU..."
+
+    # Create the UHCI and XHCI controllers
+    QEMU_USB_PARAMETERS+=" -device piix3-usb-uhci,id=uhci -device qemu-xhci,id=xhci"
+
     # Create a temporary file that QEMU can mount as the disk content
     HOST_PATH="/tmp/qemu_usb_drive.img"
     dd if=/dev/zero of=${HOST_PATH} bs=1M count=16 >/dev/null 2>&1
     printf 'This is some text stored on the USB mass storage.\n' | dd of="${HOST_PATH}" conv=notrunc status=none
-    QEMU_USB_DRIVE_PARAMETERS="-drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device qemu-xhci,id=xhci -device usb-storage,drive=usbdisk"
+    QEMU_USB_PARAMETERS+=" -drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device usb-storage,drive=usbdisk"
+
+    # Mount a virtual keyboard through USB
+    QEMU_USB_PARAMETERS+=" -device usb-kbd,bus=xhci.0"
 fi
 
 # ----------------------------------------------------------------------------------------------------------------
 # Launch QEMU
 # ----------------------------------------------------------------------------------------------------------------
-QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_DRIVE_PARAMETERS} -monitor stdio"
+QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PARAMETERS} -monitor stdio"
 
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
+
+    if [[ -z $TERMINAL ]]; then
+        echo " !!! The \$TERMINAL environment variable is not set on this machine !!!"
+        exit 1
+    fi
+
     $TERMINAL -e gdb \
         -ex "set confirm off" \
         -ex "file ${BUILD_DIR}kernel.elf" \

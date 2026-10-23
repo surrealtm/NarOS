@@ -1,6 +1,8 @@
 #include "xhci.h"
 #include "base.h"
 #include "ctrl.h"
+#include "interrupt/interrupt.h"
+#include "usb/hid.h"
 
 #define XHCI_MAX_CONTROLLERS 4
 
@@ -22,12 +24,19 @@
 typedef enum XHCI_USBCMD {
     XHCI_USBCMD_Run_Stop = 1 << 0,
     XHCI_USBCMD_Host_Controller_Reset = 1 << 1,
+    XHCI_USBCMD_Interrupt_Enable = 1 << 2,
 } XHCI_USBCMD;
 
 typedef enum XHCI_USBSTS {
     XHCI_USBSTS_Halted = 1 << 0,
+    XHCI_USBSTS_Event_Interrupt = 1 << 3,
     XHCI_USBSTS_Controller_Not_Ready = 1 << 11,
 } XHCI_USBSTS;
+
+typedef enum XHCI_IMAN {
+    XHCI_IMAN_Interrupt_Pending = 1 << 0,
+    XHCI_IMAN_Interrupt_Enable = 1 << 1,
+} XHCI_IMAN;
 
 typedef enum XHCI_Context_Dword {
     XHCI_INPUT_ADD_CONTEXT_FLAGS = 1,
@@ -112,6 +121,7 @@ typedef struct XHCI_Controller {
     u8 context_size;
     u8 port_count;
     u8 slot_count;
+    u8 interrupt_signal;
     u8 enumerating_port;
     b8 has_enumerating_port;
     XHCI_Device *pending_device;
@@ -120,11 +130,16 @@ typedef struct XHCI_Controller {
     XHCI_Ring command_ring;
     XHCI_Ring event_ring;
     XHCI_ERST_Entry event_ring_segment_table ALIGN_DECLARATION(64);
+    XHCI_Device *keyboard_device;
+    XHCI_TRB *keyboard_transfer;
+    u8 keyboard_endpoint_id;
+    HID_Keyboard_Report keyboard_report ALIGN_DECLARATION(16);
 } XHCI_Controller;
 
 static XHCI_Controller xhci_controllers[XHCI_MAX_CONTROLLERS];
 static u32 xhci_controller_count;
 static XHCI_Device xhci_devices[XHCI_DEVICE_CAPACITY];
+static b8 xhci_interrupt_registered[16];
 
 static u8 scratchpad_pages[XHCI_SCRATCHPAD_CAPACITY][4096] ALIGN_DECLARATION(4096);
 static u32 scratchpad_pages_used;
@@ -304,8 +319,10 @@ b8 submit_command(XHCI_Controller *controller, XHCI_TRB command, XHCI_TRB *event
 }
 
 static
-b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address) {
+b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address, const u8 interrupt_signal) {
+    if(interrupt_signal < 0x20 || interrupt_signal >= 0x30) return false;
     controller->mmio_base = (volatile u8 *)(u32)(pci_address & ~0xfu);
+    controller->interrupt_signal = interrupt_signal;
 
     const u8 capability_length = *controller->mmio_base;
     const u32 hcsparams1 = mmio_read32(at(controller->mmio_base, 0x04));
@@ -357,6 +374,77 @@ b8 xhci_initialize_controller(XHCI_Controller *controller, const u32 pci_address
 
     mmio_write32(at(controller->operational_base, 0x00), XHCI_USBCMD_Run_Stop);
     return wait_for_bits(at(controller->operational_base, 0x04), XHCI_USBSTS_Halted, false);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Keyboard Report Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+void enqueue_keyboard_report(XHCI_Controller *controller) {
+    XHCI_Device *device = controller->keyboard_device;
+    XHCI_Ring *ring = &device->bulk_rings[HCI_DIRECTION_In];
+
+    controller->keyboard_transfer = ring_push(ring, (XHCI_TRB) {
+        .parameter_low = PHYSICAL_ADDRESS(&controller->keyboard_report),
+        .status = sizeof(controller->keyboard_report),
+        .control = XHCI_TRB_TYPE_Normal | XHCI_TRB_IOC | XHCI_TRB_ISP,
+    });
+    memory_barrier();
+    mmio_write32(at(controller->doorbell_base, device->slot * 4), controller->keyboard_endpoint_id);
+}
+
+static
+void poll_keyboard_reports(XHCI_Controller *controller) {
+    XHCI_TRB event;
+    while(event_pop(controller, &event)) {
+        const u64 transfer_pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
+        if(trb_type(&event) != XHCI_TRB_TYPE_Transfer_Event ||
+            transfer_pointer != PHYSICAL_ADDRESS(controller->keyboard_transfer)) continue;
+
+        const u32 code = completion_code(&event);
+        if(code == 1 || code == 13) { // Success or short packet
+            hid_parse_keyboard_report(controller->keyboard_report);
+        }
+        enqueue_keyboard_report(controller);
+    }
+}
+
+static
+void xhci_interrupt(void) {
+    for(u32 i = 0; i < xhci_controller_count; ++i) {
+        XHCI_Controller *controller = &xhci_controllers[i];
+        if(!controller->keyboard_transfer) continue;
+
+        volatile u8 *iman = at(controller->runtime_base, 0x20);
+        if(!(mmio_read32(iman) & XHCI_IMAN_Interrupt_Pending)) continue;
+
+        poll_keyboard_reports(controller);
+        mmio_write32(iman, XHCI_IMAN_Interrupt_Pending | XHCI_IMAN_Interrupt_Enable);
+        mmio_write32(at(controller->operational_base, 0x04), XHCI_USBSTS_Event_Interrupt);
+    }
+}
+
+static
+b8 xhci_initialize_keyboard_report(XHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx) {
+    XHCI_Device *device = find_device(controller, device_idx);
+    const u8 id = endpoint_id(endpoint_idx, HCI_DIRECTION_In);
+    if(!device || endpoint_idx == 0 || endpoint_idx >= 16 || device->bulk_endpoint_ids[HCI_DIRECTION_In] != id) return false;
+
+    controller->keyboard_device = device;
+    controller->keyboard_endpoint_id = id;
+    enqueue_keyboard_report(controller);
+
+    const u8 interrupt_index = controller->interrupt_signal - 0x20;
+    if(!xhci_interrupt_registered[interrupt_index]) {
+        interrupt_register_callback(controller->interrupt_signal, xhci_interrupt);
+        xhci_interrupt_registered[interrupt_index] = true;
+    }
+
+    volatile u8 *iman = at(controller->runtime_base, 0x20);
+    mmio_write32(iman, XHCI_IMAN_Interrupt_Pending | XHCI_IMAN_Interrupt_Enable);
+    mmio_write32(at(controller->operational_base, 0x00), mmio_read32(at(controller->operational_base, 0x00)) | XHCI_USBCMD_Interrupt_Enable);
+    return true;
 }
 
 static s32 xhci_get_port_capacity(const XHCI_Controller *controller) { return controller->port_count; }
@@ -584,6 +672,7 @@ XHCI_Controller *xhci_allocate_controller(void) {
 HCI_Controller hci_controller_from_xhci(XHCI_Controller *xhci) {
     return (HCI_Controller) { xhci,
         (HCI_Initialize_Controller) xhci_initialize_controller,
+        (HCI_Initialize_Keyboard_Report) xhci_initialize_keyboard_report,
         (HCI_Get_Port_Capacity) xhci_get_port_capacity,
         (HCI_Get_Port_Speed) xhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) xhci_reset_and_enable_port,

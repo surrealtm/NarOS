@@ -192,12 +192,12 @@ void terminal_initialize(void) {
 
 void terminal_run(void) {
     while(!os_ctrl_exit_requested()) {
-        blit_to_screen(&terminal);
         const Text_Input_Signal text_input_signal = text_input_update(&terminal.text_input);
+
         switch(text_input_signal) {
             case TEXT_INPUT_SIGNAL_None:
-                wait_for_input();
                 break;
+
             case TEXT_INPUT_SIGNAL_Entered: {
                 const Str8 text_input_string = text_input_content(&terminal.text_input);
                 terminal_print_string(str8("> "));
@@ -211,6 +211,9 @@ void terminal_run(void) {
                 text_input_clear(&terminal.text_input);
             } break;
         }
+
+        blit_to_screen(&terminal);
+        wait_for_input();
     }
 }
 
@@ -227,4 +230,6 @@ void terminal_print_string(Str8 string) {
     for(s32 i = 0; i < string.count; ++i) {
         write_character(&terminal, string.data[i], terminal.configured_foreground, terminal.configured_background);
     }
+
+    blit_to_screen(&terminal);
 }

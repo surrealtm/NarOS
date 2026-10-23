@@ -3,11 +3,9 @@
 
 #define PIT_HZ 1193180LL
 #define TICKS_PER_SECOND 1000LL
-#define NANOSECONDS_TO_SECONDS 1000000000LL
-
-volatile u64 tick_counter = 0; // This is modified by an interrupt handler, which confuses the optimizer when used in loops
-
+#define NANOSECONDS_PER_SECONDS 1000000000LL
 #define INTERRUPT_DESCRIPTOR_COUNT 256
+#define INTERRUPT_CALLBACK_CAPACITY 4
 
 typedef struct Interrupt_Descriptor_Table_Entry {
     u16 base_lo;
@@ -29,14 +27,18 @@ typedef struct Interrupt_Register_State {
     u32 eip, cs, eflags, useresp, ss;
 } Interrupt_Register_State;
 
+typedef struct Interrupt_Callback_List {
+    Interrupt_Callback callbacks[INTERRUPT_CALLBACK_CAPACITY];
+} Interrupt_Callback_List;
+
 static Interrupt_Descriptor_Table_Entry interrupt_descriptor_table[INTERRUPT_DESCRIPTOR_COUNT];
 static Interrupt_Descriptor_Table_Pointer interrupt_descriptor_table_pointer;
-static Interrupt_Callback interrupt_callbacks[INTERRUPT_DESCRIPTOR_COUNT];
+static Interrupt_Callback_List interrupt_callback_lists[INTERRUPT_DESCRIPTOR_COUNT];
+
+static volatile u64 tick_counter = 0; // This is modified by an interrupt handler, which confuses the optimizer when used in loops
 
 extern void interrupt_dummy_master(void);
 extern void interrupt_dummy_slave(void);
-extern void interrupt_20(void);
-extern void interrupt_21(void);
 
 static
 void install_interrupt_descriptor(const u8 signal, const u32 base, const u16 segment, const u8 flags) {
@@ -86,8 +88,26 @@ void setup_interrupt_descriptor_table(void) {
     }
 
     // Install the interrupt handlers we actually care about. Only these will result in a call to `interrupt_handler`.
-    install_interrupt_descriptor(0x20, (u32) interrupt_20, segment, flags);
-    install_interrupt_descriptor(0x21, (u32) interrupt_21, segment, flags);
+#define install(id) extern void interrupt_##id(void); install_interrupt_descriptor(0x##id, (u32) interrupt_##id, segment, flags)
+
+    install(20);
+    install(21);
+    install(22);
+    install(23);
+    install(24);
+    install(25);
+    install(26);
+    install(27);
+    install(28);
+    install(29);
+    install(2a);
+    install(2b);
+    install(2c);
+    install(2d);
+    install(2e);
+    install(2f);
+
+#undef install
 }
 
 static
@@ -109,11 +129,14 @@ void initialize_tick_counter(void) {
  * Prevent the compiler from optimizing out this entire function.
  */
 void interrupt_handler(const volatile Interrupt_Register_State *state) {
-    if(state->signal < ARRAY_COUNT(interrupt_callbacks) && interrupt_callbacks[state->signal]) {
-        interrupt_callbacks[state->signal]();
+    if (state->signal < ARRAY_COUNT(interrupt_callback_lists)) {
+        const Interrupt_Callback_List *list = &interrupt_callback_lists[state->signal];
+        for (u32 callback_idx = 0; callback_idx < ARRAY_COUNT(list->callbacks); ++callback_idx) {
+            if(list->callbacks[callback_idx]) list->callbacks[callback_idx]();
+        }
     }
 
-    if(state->signal >= 40) {
+    if (state->signal >= 40) {
         // If the signal is greater than or equal to 40, then we need to send an EOI to
         // the slave interrupt controller
         port_write_u8(0xa0, 0x20);
@@ -131,14 +154,22 @@ void interrupt_initialize(void) {
     initialize_tick_counter();
 }
 
-void interrupt_register_callback(Interrupt_Signal signal, Interrupt_Callback callback) {
-    if(signal < 0 || signal >= ARRAY_COUNT(interrupt_callbacks)) {
+void interrupt_register_callback(const u32 signal, const Interrupt_Callback callback) {
+    if (signal >= ARRAY_COUNT(interrupt_callback_lists)) {
         return;
     }
-    assert(interrupt_callbacks[signal] == null, "Registered multiple callbacks for the same signal.");
+
     assert(has_interrupt_handler(signal), "Tried to register a callback for an unhandled signal.");
-    (void) has_interrupt_handler;
-    interrupt_callbacks[signal] = callback;
+
+    Interrupt_Callback_List *list = &interrupt_callback_lists[signal];
+    for (u32 callback_idx = 0; callback_idx < ARRAY_COUNT(list->callbacks); ++callback_idx) {
+        if (list->callbacks[callback_idx] == null) {
+            list->callbacks[callback_idx] = callback;
+            return;
+        }
+    }
+
+    panic(str8("Couldn't register another interrupt callback on this signal, reached the maximum capacity!"));
 }
 
 u64 interrupt_get_tick(void) {
@@ -146,5 +177,9 @@ u64 interrupt_get_tick(void) {
 }
 
 u64 interrupt_ticks_from_nanoseconds(const u64 nanoseconds) {
-    return (nanoseconds * TICKS_PER_SECOND) / NANOSECONDS_TO_SECONDS;
+    return (nanoseconds * TICKS_PER_SECOND) / NANOSECONDS_PER_SECONDS;
+}
+
+u64 interrupt_nanoseconds_from_ticks(const u64 ticks) {
+    return (ticks / TICKS_PER_SECOND) * NANOSECONDS_PER_SECONDS;
 }

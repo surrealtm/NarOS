@@ -6,6 +6,7 @@
 - Added XHCI protocol for modern USB drive control [!31](https://github.com/surrealtm/NarOS/pull/31)
 - Added HCI abstraction layer for implementations [!30](https://github.com/surrealtm/NarOS/pull/30)
 - Added USB and SCSI protocols for mass storage device interaction [!29](https://github.com/surrealtm/NarOS/pull/29)
+- Added keyboard event parsing through USB [!34](https://github.com/surrealtm/NarOS/pull/34)
 - Added formatted string printing in `os_output_print` [!32](https://github.com/surrealtm/NarOS/pull/32)
 
 ## v0.1.0 - 30.09.2026

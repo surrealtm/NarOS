@@ -111,12 +111,12 @@ b8 scsi_execute(const USB_Device *device, const void *command_data, const u8 com
 
     move_memory(command_block.command_data, command_data, command_length);
 
-    if(hci_bulk_write(&device->hci, device->address, device->bulk_out_endpoint, &command_block, sizeof(command_block)) != sizeof(command_block)) {
+    if(hci_bulk_write(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, &command_block, sizeof(command_block)) != sizeof(command_block)) {
         return false;
     }
 
     if(data_length > 0) {
-        const s32 transferred = direction == SCSI_DIRECTION_To_Host ? hci_bulk_read(&device->hci, device->address, device->bulk_in_endpoint, data, data_length) : hci_bulk_write(&device->hci, device->address, device->bulk_out_endpoint, data, data_length);
+        const s32 transferred = direction == SCSI_DIRECTION_To_Host ? hci_bulk_read(&device->hci, device->address, device->mass_storage.bulk_in_endpoint, data, data_length) : hci_bulk_write(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, data, data_length);
 
         if((u32) transferred != data_length) {
             return false;
@@ -124,7 +124,7 @@ b8 scsi_execute(const USB_Device *device, const void *command_data, const u8 com
     }
 
     Command_Status_Wrapper command_status = { 0 };
-    if(hci_bulk_read(&device->hci, device->address, device->bulk_in_endpoint, &command_status, sizeof(command_status)) != sizeof(command_status)) {
+    if(hci_bulk_read(&device->hci, device->address, device->mass_storage.bulk_in_endpoint, &command_status, sizeof(command_status)) != sizeof(command_status)) {
         return false;
     }
 
@@ -142,6 +142,8 @@ s32 determine_block_sector_size(const USB_Device *device) {
 }
 
 b8 scsi_inquire(const USB_Device *device, SCSI_Inquiry *result) {
+    if (!device->mass_storage.supported) return false;
+
     const SCSI_Command_Inquiry inquiry = {
         .operation_code = SCSI_COMMAND_Inquiry,
         .allocation_length = u16_to_big_endian(sizeof(*result)),
@@ -151,6 +153,8 @@ b8 scsi_inquire(const USB_Device *device, SCSI_Inquiry *result) {
 }
 
 b8 scsi_read_capacity(const USB_Device *device, SCSI_Read_Capacity *result) {
+    if (!device->mass_storage.supported) return false;
+
     const SCSI_Command_Read_Capacity read_capacity = {
         .operation_code = SCSI_COMMAND_Read_Capacity,
     };
@@ -165,6 +169,8 @@ b8 scsi_read_capacity(const USB_Device *device, SCSI_Read_Capacity *result) {
 }
 
 b8 scsi_read(const USB_Device *device, const u32 logical_block_address, const u16 block_count, void *data) {
+    if (!device->mass_storage.supported) return false;
+
     const SCSI_Command_Read read = {
         .operation_code = SCSI_COMMAND_Read,
         .logical_block_address = u32_to_big_endian(logical_block_address),
@@ -176,6 +182,8 @@ b8 scsi_read(const USB_Device *device, const u32 logical_block_address, const u1
 }
 
 b8 scsi_write(const USB_Device *device, const u32 logical_block_address, const u16 number_of_blocks, const void *data) {
+    if (!device->mass_storage.supported) return false;
+
     const SCSI_Command_Write write = {
         .operation_code = SCSI_COMMAND_Write,
         .logical_block_address = u32_to_big_endian(logical_block_address),

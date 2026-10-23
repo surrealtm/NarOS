@@ -1,10 +1,13 @@
 #include "input.h"
 #include "input_kernel.h"
-#include "scan_code_tables.h"
+#include "input/tables.h"
 #include "interrupt/interrupt.h"
 #include "port/port.h"
 
 #define EVENT_QUEUE_CAPACITY 128
+
+#define KEY_REPEAT_DELAY_NANOSECONDS 250000000 // After how many nanoseconds the first repetition shall occur
+#define KEY_REPEAT_RATE 20 // How many repetitions per second shall be generated for a held key
 
 typedef struct Event_Buffer {
     OS_Input_Event data[EVENT_QUEUE_CAPACITY];
@@ -12,19 +15,22 @@ typedef struct Event_Buffer {
     u32 write_idx;
 } Event_Buffer;
 
+typedef struct Key_State {
+    b8 down;
+    b8 repeated;
+    /* Time-tick of when the last press event was generated for this key, either through a physical press or through
+     * a repetition event */
+    u64 tick_of_last_press;
+} Key_State;
+
 typedef struct Keyboard_State {
-    b8 left_control_down;
-    b8 right_control_down;
-    b8 left_shift_down;
-    b8 right_shift_down;
-    b8 caps_lock_active;
-    b8 right_alt_down;
-    b8 in_escaped_mode;
+    OS_Input_Keyboard_Layout layout;
+    OS_Input_Keyboard_Modifiers modifiers;
+    Key_State keys[OS_INPUT_KEY_COUNT];
 } Keyboard_State;
 
-static Event_Buffer event_buffer;
-static Keyboard_State keyboard_state;
-static const Scan_Code_Table * active_scan_code_table = &scan_code_table_de;
+static Event_Buffer event_buffer = { 0 };
+static Keyboard_State keyboard_state = { 0 };
 
 static
 u32 advance_index(const u32 idx) {
@@ -32,41 +38,9 @@ u32 advance_index(const u32 idx) {
 }
 
 static
-void push_event(const OS_Input_Event event) {
-    event_buffer.data[event_buffer.write_idx] = event;
-    event_buffer.write_idx = advance_index(event_buffer.write_idx);
-    if(event_buffer.read_idx == event_buffer.write_idx) {
-        // We've caught back up to the read index, as the reader was too slow.
-        // The new value in the `read_idx` is now the *latest* event, but the read index should
-        // point at the oldest event in the queue, therefore we forcefully advance the read index here -
-        // basically implicitly popping the last event from the queue
-        event_buffer.read_idx = advance_index(event_buffer.read_idx);
-    }
-}
-
-static
-OS_Input_Event make_keyboard_event(const OS_Input_Keyboard_Event keyboard) {
-    OS_Input_Event event;
-    event.kind = OS_INPUT_EVENT_KIND_Keyboard;
-    event.data.keyboard = keyboard;
-    return event;
-}
-
-static
-OS_Input_Key_Code read_key_code(const Scan_Code_Mapping mapping) {
-    if(keyboard_state.right_alt_down) {
-        return mapping.alt;
-    } else if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) {
-        return mapping.shift;
-    } else {
-        return mapping.normal;
-    }
-}
-
-static
-char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_down) {
-    const u32 utf32 = utf32_from_keycode[key_code];
-    if(shift_down) {
+u32 utf32_from_key_code(const OS_Input_Key_Code key_code) {
+    const u32 utf32 = UTF32_FROM_KEY_CODE[key_code];
+    if(keyboard_state.modifiers & OS_INPUT_KEYBOARD_MODIFIERS_Shift) {
         return utf32;
     }
     if(utf32 >= 'A' && utf32 <= 'Z') {
@@ -79,71 +53,73 @@ char read_ascii_from_key_code(const OS_Input_Key_Code key_code, const b8 shift_d
 }
 
 static
-OS_Input_Keyboard_Modifiers get_keyboard_modifiers(void) {
-    OS_Input_Keyboard_Modifiers mods = 0x0;
-    if(keyboard_state.left_shift_down || keyboard_state.right_shift_down || keyboard_state.caps_lock_active) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Shift;
-    if(keyboard_state.left_control_down || keyboard_state.right_control_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Control;
-    if(keyboard_state.right_alt_down) mods |= OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt;
-    return mods;
+void push_keyboard_event(const OS_Input_Key_Code key_code, const b8 down) {
+    OS_Input_Event event;
+    event.kind = OS_INPUT_EVENT_KIND_Keyboard;
+    event.data.keyboard = (OS_Input_Keyboard_Event) {
+        .key_code = key_code,
+        .modifiers = keyboard_state.modifiers,
+        .utf32 = utf32_from_key_code(key_code),
+        .down = down
+    };
+    input_push_event(event);
 }
 
 static
-void keyboard_interrupt_handler(void) {
-    const u8 scan_code = port_read_u8(0x60);
-    const b8 down = (scan_code & 0x80) == 0;
-    const u8 normalized_scan_code = scan_code & 0x7f;
+void check_for_repetitions(void) {
+    const u64 now = interrupt_get_tick();
+    const u64 initial_delay   = interrupt_ticks_from_nanoseconds(KEY_REPEAT_DELAY_NANOSECONDS);
+    const u64 repeat_interval = interrupt_ticks_from_nanoseconds(1000000000 / KEY_REPEAT_RATE);
 
-    if(normalized_scan_code > 0 && normalized_scan_code < SUPPORTED_SCAN_CODE_COUNT) {
-        const Scan_Code_Mapping *active_table = (keyboard_state.in_escaped_mode) ? active_scan_code_table->escaped : active_scan_code_table->ordinary;
-        const OS_Input_Key_Code key_code = read_key_code(active_table[normalized_scan_code]);
-        const OS_Input_Keyboard_Modifiers mods = get_keyboard_modifiers();
-        const OS_Input_Keyboard_Event keyboard_event = (OS_Input_Keyboard_Event) { key_code, mods, read_ascii_from_key_code(key_code, !!(mods & OS_INPUT_KEYBOARD_MODIFIERS_Shift)), down };
-        push_event(make_keyboard_event(keyboard_event));
-
-        switch(key_code) {
-            case OS_INPUT_KEY_Left_Control:
-                keyboard_state.left_control_down = down;
-                break;
-            case OS_INPUT_KEY_Right_Control:
-                keyboard_state.right_control_down = down;
-                break;
-            case OS_INPUT_KEY_Left_Shift:
-                keyboard_state.left_shift_down = down;
-                break;
-            case OS_INPUT_KEY_Right_Shift:
-                keyboard_state.right_shift_down = down;
-                break;
-            case OS_INPUT_KEY_Caps_Lock:
-                if(down) {
-                    keyboard_state.caps_lock_active = !keyboard_state.caps_lock_active;
-                }
-                break;
-            case OS_INPUT_KEY_Right_Alt:
-                keyboard_state.right_alt_down = down;
-                break;
-
-            default:
-                break;
+    for (OS_Input_Key_Code key_code = 0; key_code < OS_INPUT_KEY_COUNT; ++key_code) {
+        const u64 required_delta = (keyboard_state.keys[key_code].repeated) ? repeat_interval : initial_delay;
+        if (keyboard_state.keys[key_code].down && now - keyboard_state.keys[key_code].tick_of_last_press >= required_delta) {
+            keyboard_state.keys[key_code].tick_of_last_press = now;
+            keyboard_state.keys[key_code].repeated = true;
+            push_keyboard_event(key_code, true);
         }
     }
-
-    keyboard_state.in_escaped_mode = scan_code == 0xe0;
 }
 
 void input_initialize(void) {
-    interrupt_register_callback(INTERRUPT_SIGNAL_Keyboard, keyboard_interrupt_handler);
+    interrupt_register_callback(INTERRUPT_SIGNAL_Timer, check_for_repetitions);
+}
+
+void input_push_event(const OS_Input_Event event) {
+    event_buffer.data[event_buffer.write_idx] = event;
+    event_buffer.write_idx = advance_index(event_buffer.write_idx);
+    if(event_buffer.read_idx == event_buffer.write_idx) {
+        // We've caught back up to the read index, as the reader was too slow.
+        // The new value in the `read_idx` is now the *latest* event, but the read index should
+        // point at the oldest event in the queue, therefore we forcefully advance the read index here -
+        // basically implicitly popping the last event from the queue
+        event_buffer.read_idx = advance_index(event_buffer.read_idx);
+    }
+}
+
+void input_set_current_key_modifiers(const OS_Input_Keyboard_Modifiers modifiers) {
+    keyboard_state.modifiers = modifiers;
+}
+
+void input_set_current_key_state(const OS_Input_Key_Code key_code, const b8 down) {
+    if (key_code < 0 || key_code >= ARRAY_COUNT(keyboard_state.keys)) return;
+
+    if (keyboard_state.keys[key_code].down != down) {
+        keyboard_state.keys[key_code].down = down;
+        if (down) {
+            keyboard_state.keys[key_code].tick_of_last_press = interrupt_get_tick();
+            keyboard_state.keys[key_code].repeated = false;
+        }
+        push_keyboard_event(key_code, down);
+    }
 }
 
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
-    switch(layout) {
-        case OS_INPUT_KEYBOARD_LAYOUT_Standard_US:
-            active_scan_code_table = &scan_code_table_en;
-            break;
+    keyboard_state.layout = layout;
+}
 
-        case OS_INPUT_KEYBOARD_LAYOUT_German:
-            active_scan_code_table = &scan_code_table_de;
-            break;
-    }
+OS_Input_Keyboard_Layout os_input_get_keyboard_layout(void) {
+    return keyboard_state.layout;
 }
 
 b8 os_input_has_event(void) {

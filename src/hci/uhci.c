@@ -1,7 +1,9 @@
 #include "uhci.h"
 #include "base.h"
 #include "ctrl.h"
+#include "interrupt/interrupt.h"
 #include "port/port.h"
+#include "usb/hid.h"
 
 #define UHCI_MAX_CONTROLLERS 1
 
@@ -14,12 +16,13 @@
 
 // To save bit space, addresses in UHCI are assumed to be 16-byte aligned, and the lower four bits are therefore ommitted from
 // the bit representation
-#define TRANSFER_DESCRIPTOR_ADDRESS(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
-#define TRANSFER_DESCRIPTOR_POINTER(address) (VIRTUAL_ADDRESS(address << 4))
+#define LINK_ADDRESS_FROM_POINTER(pointer) (PHYSICAL_ADDRESS(pointer) >> 4)
+#define LINK_POINTER_FROM_ADDRESS(address) (VIRTUAL_ADDRESS(address << 4))
+
+#define UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY 32
 
 #define UHCI_ERROR -1
 #define UHCI_FRAME_LIST_CAPACITY 1024
-#define UHCI_TRANSFER_DESCRIPTOR_CAPACITY 32
 #define UHCI_DEVICE_CAPACITY 128
 #define UHCI_PORT_CAPACITY 2
 #define UHCI_ENDPOINT_CAPACITY 16
@@ -47,6 +50,15 @@ typedef enum UHCI_Memory_Structure_Type {
     UHCI_MEMORY_STRUCTURE_Queue_Head          = 0x1,
 } UHCI_Memory_Structure_Type;
 
+typedef enum UHCI_Controller_Status {
+    UHCI_CONTROLLER_STATUS_Usb_Interrupt         = 1 << 0,
+    UHCI_CONTROLLER_STATUS_Error                 = 1 << 1,
+    UHCI_CONTROLLER_STATUS_Resume                = 1 << 2,
+    UHCI_CONTROLLER_STATUS_Host_System_Error     = 1 << 3,
+    UHCI_CONTROLLER_STATUS_Host_Controller_Error = 1 << 4,
+    UHCI_CONTROLLER_STATUS_Halted                = 1 << 5,
+} UHCI_Controller_Status;
+
 typedef enum UHCI_Port_Status {
     UHCI_PORT_STATUS_Currently_Connected = 1 << 0,
     UHCI_PORT_STATUS_Connection_Changed  = 1 << 1,
@@ -66,7 +78,7 @@ typedef struct UHCI_Transfer_Descriptor_Link {
     UHCI_Memory_Structure_Type memory_structure_type : 1;
     u32 depth_first : 1;
     u32 reserved : 1;
-    u32 pointer : 28;
+    u32 address : 28;
 } UHCI_Transfer_Descriptor_Link;
 
 typedef struct UHCI_Transfer_Descriptor_Status {
@@ -108,7 +120,7 @@ typedef struct UHCI_Frame_List_Entry {
     u32 terminate : 1;
     UHCI_Memory_Structure_Type memory_structure_type : 1;
     u32 reserved : 2;
-    u32 pointer : 28;
+    u32 address : 28;
 } UHCI_Frame_List_Entry;
 
 typedef struct UHCI_Queue_Head {
@@ -132,13 +144,21 @@ typedef struct UHCI_Port {
 } UHCI_Port;
 
 typedef struct UHCI_Controller {
-    u32 frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
+    UHCI_Frame_List_Entry frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
     u32 pci_address;
-    u32 active_transfer_descriptors;
-    UHCI_Transfer_Descriptor transfer_descriptors[UHCI_TRANSFER_DESCRIPTOR_CAPACITY];
-    UHCI_Queue_Head queue_head;
+    u8 interrupt_signal;
     UHCI_Port ports[UHCI_PORT_CAPACITY];
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
+
+    UHCI_Queue_Head bulk_queue_head;
+    UHCI_Transfer_Descriptor bulk_transfer_descriptors[UHCI_BULK_TRANSFER_DESCRIPTOR_CAPACITY] ALIGN_DECLARATION(16);
+    u32 active_bulk_transfer_descriptors;
+
+    UHCI_Queue_Head keyboard_queue_head;
+    UHCI_Transfer_Descriptor keyboard_transfer_descriptor ALIGN_DECLARATION(16);
+    HID_Keyboard_Report keyboard_report ALIGN_DECLARATION(16);
+    u8 keyboard_device_idx;
+    u8 keyboard_endpoint_idx;
 } UHCI_Controller;
 
 static UHCI_Controller uhci_controllers[UHCI_MAX_CONTROLLERS];
@@ -186,6 +206,11 @@ b8 transfer_descriptor_is_short_packet(const UHCI_Transfer_Descriptor *descripto
     return !descriptor->status.active && descriptor->packet_header.packet_type == UHCI_PACKET_In && descriptor->status.short_packet_detect && (TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->status.transferred_length) < TRANSFER_DESCRIPTOR_DECODED_LENGTH(descriptor->packet_header.requested_length));
 }
 
+static inline
+UHCI_Queue_Head empty_queue_head(void) {
+    return (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = true }, (UHCI_Frame_List_Entry) { .terminate = true } };
+}
+
 typedef b8 (*Status_Check)(const UHCI_Controller *);
 
 static
@@ -205,8 +230,18 @@ b8 wait_for_status(const UHCI_Controller *controller, Status_Check check) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static inline
+UHCI_Controller_Status read_controller_status(const UHCI_Controller *controller) {
+    return port_read_u16(controller->pci_address + 0x02);
+}
+
+static inline
+void clear_controller_status(const UHCI_Controller *controller, const UHCI_Controller_Status status) {
+    port_write_u16(controller->pci_address + 0x02, status);
+}
+
+static inline
 b8 is_halted(const UHCI_Controller *controller) {
-    return (port_read_u16(controller->pci_address + 0x02) & (1 << 5)) != 0;
+    return (read_controller_status(controller) & UHCI_CONTROLLER_STATUS_Halted) != 0;
 }
 
 static inline
@@ -215,7 +250,12 @@ b8 is_host_reset(const UHCI_Controller *controller) {
 }
 
 static inline
-void write_frame_list_pointer(const UHCI_Controller *controller, const u32 *frame_list) {
+void enable_uhci_interrupts(const UHCI_Controller *controller) {
+    port_write_u16(controller->pci_address + 0x04, 0x4);
+}
+
+static inline
+void write_frame_list_pointer(const UHCI_Controller *controller, const UHCI_Frame_List_Entry *frame_list) {
     port_write_u32(controller->pci_address + 0x08, PHYSICAL_ADDRESS(frame_list));
 }
 
@@ -333,26 +373,19 @@ UHCI_Device *find_device(UHCI_Controller *controller, const u8 device_idx) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Transfer Descriptor Handling
+// Bulk Transfer Descriptor Handling
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-void clear_frame_list(UHCI_Controller *controller) {
-    for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        controller->frame_list[i] = 1;
-    }
-}
-
-static
 void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const UHCI_Packet_Type packet_type, const u32 requested_length, const void *data) {
-    assert(controller->active_transfer_descriptors < UHCI_TRANSFER_DESCRIPTOR_CAPACITY, "Reached the capacity of the UHCI transfer descriptor list.");
+    assert(controller->active_bulk_transfer_descriptors < ARRAY_COUNT(controller->bulk_transfer_descriptors), "Reached the capacity of the UHCI bulk transfer descriptor list.");
 
     const UHCI_Device *device = find_device(controller, device_idx);
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
 
-    if(controller->active_transfer_descriptors > 0) {
-        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->transfer_descriptors[controller->active_transfer_descriptors]) };
-        controller->transfer_descriptors[controller->active_transfer_descriptors - 1].link = link;
+    if(controller->active_bulk_transfer_descriptors > 0) {
+        const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors]) };
+        controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors - 1].link = link;
     }
 
     const u32 error_retry_counter = 3;
@@ -362,9 +395,9 @@ void add_single_transfer_descriptor(UHCI_Controller *controller, const u8 device
     const UHCI_Transfer_Descriptor_Link link = (UHCI_Transfer_Descriptor_Link) { .terminate = true };
     const UHCI_Transfer_Descriptor_Status status = (UHCI_Transfer_Descriptor_Status) { .transferred_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(0), .error_retry_counter = error_retry_counter, .active = 1, .short_packet_detect = short_packet_detect, .low_speed = device->speed == HCI_DEVICE_SPEED_Low };
     const UHCI_Transfer_Descriptor_Packet_Header packet_header = (UHCI_Transfer_Descriptor_Packet_Header) { .packet_type = packet_type, .device = device_idx, .endpoint = endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, direction), .requested_length = TRANSFER_DESCRIPTOR_ENCODED_LENGTH(requested_length) };
-    controller->transfer_descriptors[controller->active_transfer_descriptors] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data) };
+    controller->bulk_transfer_descriptors[controller->active_bulk_transfer_descriptors] = (UHCI_Transfer_Descriptor) { .link = link, .status = status, .packet_header = packet_header, .buffer_address = PHYSICAL_ADDRESS(data) };
 
-    ++controller->active_transfer_descriptors;
+    ++controller->active_bulk_transfer_descriptors;
 }
 
 static
@@ -381,37 +414,32 @@ void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, 
 }
 
 static
-void update_queue_head_pointer(UHCI_Controller *controller, const u32 transfer_descriptor_idx) {
-    controller->queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->transfer_descriptors[transfer_descriptor_idx]) };
+void update_bulk_queue_head_pointer(UHCI_Controller *controller, const s32 transfer_descriptor_idx) {
+    controller->bulk_queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = 0, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_transfer_descriptors[transfer_descriptor_idx]) };
     memory_barrier(); // Make sure the hardware sees this change before continuing with the execution
 }
 
 static
-s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const s32 status_descriptor_idx) {
-    STATIC_ASSERT(sizeof(controller->queue_head) == sizeof(UHCI_Queue_Head));
+void clear_bulk_queue(UHCI_Controller *controller) {
+    controller->bulk_queue_head = empty_queue_head();
+    memory_barrier();
+}
 
+static
+s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx, const s32 status_descriptor_idx) {
     UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
 
     //
-    // Prepare the queue head for this descriptor table
+    // Insert a queue head which points at the first bulk transfer
     //
-    update_queue_head_pointer(controller, 0);
-
-    //
-    // Make this queue live on the controller so that the descriptors should be executed
-    //
-    UHCI_Transfer_Descriptor_Link link_to_queue = (UHCI_Transfer_Descriptor_Link) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .pointer = TRANSFER_DESCRIPTOR_ADDRESS(&controller->queue_head) };
-    for(u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
-        STATIC_ASSERT(sizeof(link_to_queue) == sizeof(u32));
-        move_memory(&controller->frame_list[i], &link_to_queue, sizeof(u32));
-    }
+    update_bulk_queue_head_pointer(controller, 0);
 
     //
     // Wait until the controller has executed all descriptors in our queue
     //
     b8 successful = true;
-    while(successful && !controller->queue_head.vertical_pointer.terminate) {
-        const UHCI_Transfer_Descriptor *current_descriptor = TRANSFER_DESCRIPTOR_POINTER(controller->queue_head.vertical_pointer.pointer);
+    while(successful && !controller->bulk_queue_head.vertical_pointer.terminate) {
+        const UHCI_Transfer_Descriptor *current_descriptor = LINK_POINTER_FROM_ADDRESS(controller->bulk_queue_head.vertical_pointer.address);
         if(transfer_descriptor_has_error(current_descriptor)) {
             successful = false;
             set_data_toggle(endpoint, direction_for_packet_type(current_descriptor->packet_header.packet_type), current_descriptor->packet_header.data_toggle);
@@ -421,7 +449,7 @@ s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_i
             if(status_descriptor_idx != INVALID_TRANSFER_DESCRIPTOR_INDEX) {
                 // Detected a short packet, but the status transfer still needs to complete for a valid hardware interaction.
                 // Update the queue so that it points at that transfer descriptor...
-                update_queue_head_pointer(controller, status_descriptor_idx);
+                update_bulk_queue_head_pointer(controller, status_descriptor_idx);
             } else {
                 // Reached the end of this transmission, exit...
                 break;
@@ -432,25 +460,24 @@ s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_i
     }
 
     //
-    // Reset the frame list so that the controller does not attempt to re-execute these descriptors again.
-    // Wait until the controller has moved onto a new frame number (to which we've already written the dummy
-    // terminate frame), to make sure that it is not still trying to read from our current queue
+    // Wait until the controller has completely read the current frame, so that we can safely make modifications
+    // to the transfer descriptor list (as the controller will no longer access them from now on).
     //
-    clear_frame_list(controller);
-    memory_barrier();
+    clear_bulk_queue(controller);
+
     const u16 current_frame_number = read_frame_number(controller);
     while(read_frame_number(controller) == current_frame_number) {
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
     }
 
     s32 number_of_bytes_transferred = 0;
-    for(u32 i = 0; i < controller->active_transfer_descriptors; ++i) {
-        if(controller->transfer_descriptors[i].packet_header.packet_type != UHCI_PACKET_Setup) {
-            number_of_bytes_transferred += TRANSFER_DESCRIPTOR_DECODED_LENGTH(controller->transfer_descriptors[i].status.transferred_length);
+    for(u32 i = 0; i < controller->active_bulk_transfer_descriptors; ++i) {
+        if(controller->bulk_transfer_descriptors[i].packet_header.packet_type != UHCI_PACKET_Setup) {
+            number_of_bytes_transferred += TRANSFER_DESCRIPTOR_DECODED_LENGTH(controller->bulk_transfer_descriptors[i].status.transferred_length);
         }
     }
 
-    controller->active_transfer_descriptors = 0;
+    controller->active_bulk_transfer_descriptors = 0;
     return successful ? number_of_bytes_transferred : UHCI_ERROR;
 }
 
@@ -479,7 +506,56 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
         add_single_transfer_descriptor(controller, device_idx, endpoint_idx, packet_type, 0, null);
     }
 
-    return submit(controller, device_idx, endpoint_idx, controller->active_transfer_descriptors - 1);
+    return submit(controller, device_idx, endpoint_idx, controller->active_bulk_transfer_descriptors - 1);
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Keyboard Report Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+void clear_keyboard_queue(UHCI_Controller *controller) {
+    controller->keyboard_queue_head = empty_queue_head();
+    memory_barrier();
+}
+
+static
+void enqueue_keyboard_report(UHCI_Controller *controller) {
+    const HCI_Direction direction = HCI_DIRECTION_In;
+    UHCI_Endpoint *endpoint = find_endpoint(controller, controller->keyboard_device_idx, controller->keyboard_endpoint_idx);
+
+    controller->keyboard_transfer_descriptor = (UHCI_Transfer_Descriptor) {
+        .link = { .terminate = true },
+        .status = { .active = true, .interrupt_on_complete = 1, .error_retry_counter = 3 },
+        .packet_header = { UHCI_PACKET_In, .device = controller->keyboard_device_idx, .endpoint = controller->keyboard_endpoint_idx, .data_toggle = get_and_advance_data_toggle(endpoint, direction), .requested_length = sizeof(controller->keyboard_report) },
+        .buffer_address = PHYSICAL_ADDRESS(&controller->keyboard_report),
+    };
+
+    controller->keyboard_queue_head.vertical_pointer = (UHCI_Frame_List_Entry) { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Transfer_Descriptor, .address = LINK_ADDRESS_FROM_POINTER(&controller->keyboard_transfer_descriptor) };
+
+    memory_barrier();
+}
+
+static inline
+void poll_keyboard_report(UHCI_Controller *controller) {
+    if (controller->keyboard_transfer_descriptor.status.active) return; // No data has been filled in yet from the hardware
+
+    hid_parse_keyboard_report(controller->keyboard_report);
+    enqueue_keyboard_report(controller);
+}
+
+static
+void uhci_interrupt(void) {
+    for (u32 i = 0; i < uhci_controller_count; ++i) {
+        UHCI_Controller *controller = &uhci_controllers[i];
+        const UHCI_Controller_Status status = read_controller_status(controller);
+
+        if ((status & UHCI_CONTROLLER_STATUS_Usb_Interrupt) != 0) {
+            poll_keyboard_report(&uhci_controllers[i]);
+            clear_controller_status(controller, status);
+        }
+    }
 }
 
 
@@ -488,9 +564,9 @@ s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
-    controller->pci_address = pci_address;
-    controller->queue_head  = (UHCI_Queue_Head) { (UHCI_Frame_List_Entry) { .terminate = 1 }, (UHCI_Frame_List_Entry) { .terminate = 1 } };
+b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address, const u8 interrupt_signal) {
+    controller->pci_address      = pci_address;
+    controller->interrupt_signal = interrupt_signal;
 
     for(u32 device_idx = 0; device_idx < UHCI_DEVICE_CAPACITY; ++device_idx) {
         for(u32 endpoint_idx = 0; endpoint_idx < UHCI_ENDPOINT_CAPACITY; ++endpoint_idx) {
@@ -502,7 +578,17 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
         controller->ports[i] = (UHCI_Port) { .register_address = controller->pci_address + 0x10 + (i * 2), .connected = false };
     }
 
-    clear_frame_list(controller);
+    clear_keyboard_queue(controller);
+    clear_bulk_queue(controller);
+
+    const UHCI_Frame_List_Entry to_bulk_queue = { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->bulk_queue_head) };
+    const UHCI_Frame_List_Entry to_keyboard_queue = { .terminate = false, .memory_structure_type = UHCI_MEMORY_STRUCTURE_Queue_Head, .address = LINK_ADDRESS_FROM_POINTER(&controller->keyboard_queue_head) };
+
+    controller->keyboard_queue_head.horizontal_pointer = to_bulk_queue;
+
+    for (u32 i = 0; i < ARRAY_COUNT(controller->frame_list); ++i) {
+        controller->frame_list[i] = to_keyboard_queue;
+    }
 
     issue_command(controller, UHCI_COMMAND_Halt);
     if(!wait_for_status(controller, is_halted)) {
@@ -521,6 +607,16 @@ b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address
     write_frame_timing(controller, 0x40);
     issue_command(controller, UHCI_COMMAND_Start | UHCI_COMMAND_Configure | UHCI_COMMAND_MaxPacket64);
 
+    return true;
+}
+
+static
+b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_idx) {
+    controller->keyboard_device_idx = device_idx;
+    controller->keyboard_endpoint_idx = endpoint_idx;
+    enqueue_keyboard_report(controller);
+    interrupt_register_callback(controller->interrupt_signal, uhci_interrupt);
+    enable_uhci_interrupts(controller);
     return true;
 }
 
@@ -642,6 +738,7 @@ HCI_Controller hci_controller_from_uhci(UHCI_Controller *uhci) {
     return (HCI_Controller) {
         uhci,
         (HCI_Initialize_Controller) uhci_initialize_controller,
+        (HCI_Initialize_Keyboard_Report) uhci_initialize_keyboard_report,
         (HCI_Get_Port_Capacity) uhci_get_port_capacity,
         (HCI_Get_Port_Speed) uhci_get_port_speed,
         (HCI_Reset_And_Enable_Port) uhci_reset_and_enable_port,

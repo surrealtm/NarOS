@@ -1,9 +1,13 @@
 #include "usb.h"
 #include "usb/scsi.h"
 
-#define INVALID_ENDPOINT U8_MAX
+#include "output.h"
+
+#define USB_INVALID_INTERFACE 0xff
+#define USB_INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
 #define USB_MAX_DEVICES 8
+
 
 typedef enum USB_Descriptor_Type {
     USB_DESCRIPTOR_TYPE_Device = 0x1,
@@ -17,6 +21,7 @@ typedef enum USB_Descriptor_Type {
 } USB_Descriptor_Type;
 
 typedef enum USB_Interface_Class {
+    USB_INTERFACE_CLASS_Human_Device_Interface = 0x03,
     USB_INTERFACE_CLASS_Mass_Storage = 0x08,
 } USB_Interface_Class;
 
@@ -24,9 +29,17 @@ typedef enum USB_Interface_Mass_Storage_Subclass {
     USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent = 0x06,
 } USB_Interface_Mass_Storage_Subclass;
 
-typedef enum USB_Interface_Protocol {
-    USB_INTERFACE_PROTOCOL_Bulk_Only = 0x50,
-} USB_Interface_Protocol;
+typedef enum USB_Interface_Hid_Subclass {
+    USB_INTERFACE_HID_SUBCLASS_Boot_Interface = 0x1,
+} USB_Interface_Hid_Subclass;
+
+typedef enum USB_Interface_Mass_Storage_Protocol {
+    USB_INTERFACE_MASS_STORAGE_PROTOCOL_Bulk_Only = 0x50,
+} USB_Interface_Mass_Storage_Protocol;
+
+typedef enum USB_Interface_Hid_Protocol {
+    USB_INTERFACE_HID_PROTOCOL_Keyboard = 0x1,
+} USB_Interface_Hid_Protocol;
 
 typedef enum USB_Endpoint_Direction {
     USB_ENDPOINT_DIRECTION_Out = 0x0,
@@ -39,6 +52,10 @@ typedef enum USB_Transfer_Type {
     USB_TRANSFER_TYPE_Bulk        = 0x2,
     USB_TRANSFER_TYPE_Interrupt   = 0x3,
 } USB_Transfer_Type;
+
+typedef enum USB_Protocol {
+    USB_PROTOCOL_Boot = 0x0,
+} USB_Protocol;
 
 typedef enum USB_Request_Direction {
     USB_REQUEST_DIRECTION_Host_To_Device = 0x0,
@@ -63,6 +80,7 @@ typedef enum USB_Request {
     USB_REQUEST_Set_Address       = 0x05,
     USB_REQUEST_Get_Descriptor    = 0x06,
     USB_REQUEST_Set_Configuration = 0x09,
+    USB_REQUEST_Set_Protocol      = 0x0b,
 } USB_Request;
 
 typedef struct USB_Request_Header {
@@ -201,11 +219,21 @@ b8 configure_host_endpoints(USB_Device *device, const u8 port_idx) {
 }
 
 static
+b8 validate_keyboard_interface(const USB_Keyboard_Interface *interface) {
+    return interface->interface_number != USB_INVALID_INTERFACE && interface->interrupt_in_endpoint != USB_INVALID_ENDPOINT && interface->interrupt_in_packet_size != 0 && interface->interval != 0;
+}
+
+static
+b8 validate_mass_storage_interface(const USB_Mass_Storage_Interface *interface) {
+    return interface->interface_number != USB_INVALID_INTERFACE && interface->bulk_in_endpoint != USB_INVALID_ENDPOINT && interface->bulk_out_endpoint != USB_INVALID_ENDPOINT && interface->bulk_in_packet_size != 0 && interface->bulk_out_packet_size != 0;
+}
+
+static
 b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 payload_size_in_bytes) {
     const USB_Configuration_Descriptor *configuration_descriptor = (USB_Configuration_Descriptor *) payload;
     device->configuration_value = configuration_descriptor->configuration_value;
 
-    b8 in_mass_storage_interface = false;
+    USB_Interface current_interface = USB_INTERFACE_COUNT;
 
     for(u16 payload_offset_in_bytes = 0; payload_offset_in_bytes + sizeof(USB_Descriptor_Header) <= payload_size_in_bytes;) {
         const USB_Descriptor_Header *header = (USB_Descriptor_Header *) (&payload[payload_offset_in_bytes]);
@@ -214,39 +242,71 @@ b8 parse_configuration_payload(USB_Device *device, const u8 *payload, const u16 
 
         switch(header->descriptor_type) {
             case USB_DESCRIPTOR_TYPE_Interface: {
+                if (header->length < sizeof(USB_Interface_Descriptor)) return false;
                 const USB_Interface_Descriptor *interface = (USB_Interface_Descriptor *) header;
-                in_mass_storage_interface = !in_mass_storage_interface &&
-                    interface->alternate_setting == 0 &&
-                    interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage &&
-                    interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent &&
-                    interface->interface_protocol == USB_INTERFACE_PROTOCOL_Bulk_Only;
 
-                if(in_mass_storage_interface) {
-                    device->mass_storage_interface = interface->interface_number;
+                if (interface->interface_number >= configuration_descriptor->interface_count) return false;
+
+                current_interface = USB_INTERFACE_COUNT;
+
+                if (interface->alternate_setting != 0) {
+                    // Invalid interface, ignore
+                } else if (interface->interface_class == USB_INTERFACE_CLASS_Human_Device_Interface && interface->interface_subclass == USB_INTERFACE_HID_SUBCLASS_Boot_Interface && interface->interface_protocol == USB_INTERFACE_HID_PROTOCOL_Keyboard) {
+                    device->keyboard.interface_number = interface->interface_number;
+                    current_interface = USB_INTERFACE_Keyboard;
+                } else if (interface->interface_class == USB_INTERFACE_CLASS_Mass_Storage && interface->interface_subclass == USB_INTERFACE_MASS_STORAGE_SUBCLASS_SCSI_Transparent && interface->interface_protocol == USB_INTERFACE_MASS_STORAGE_PROTOCOL_Bulk_Only) {
+                    device->mass_storage.interface_number = interface->interface_number;
+                    current_interface = USB_INTERFACE_Mass_Storage;
                 }
             } break;
 
             case USB_DESCRIPTOR_TYPE_Endpoint: {
+                if (header->length < sizeof(USB_Endpoint_Descriptor)) return false;
                 const USB_Endpoint_Descriptor *endpoint = (USB_Endpoint_Descriptor *) header;
-                if(!in_mass_storage_interface) break;
 
                 const u16 packet_size_mask = 0x07ff;
                 const u16 packet_size = (endpoint->maximum_packet_size & packet_size_mask);
                 const u8 endpoint_number = endpoint->address.endpoint_number;
-                if(endpoint->attributes.transfer_type != USB_TRANSFER_TYPE_Bulk || endpoint_number == 0 || packet_size == 0) break;
 
-                if(endpoint->address.direction == USB_ENDPOINT_DIRECTION_In) {
-                    device->bulk_in_endpoint = endpoint_number;
-                    device->bulk_in_packet_size = packet_size;
-                } else {
-                    device->bulk_out_endpoint = endpoint_number;
-                    device->bulk_out_packet_size = packet_size;
+                if (endpoint_number == 0 || packet_size == 0) {
+                    // Invalid endpoint, ignore
+                    break;
+                }
+
+                switch(current_interface) {
+                    case USB_INTERFACE_Keyboard:
+                        if (endpoint->attributes.transfer_type == USB_TRANSFER_TYPE_Interrupt) {
+                            if (endpoint->address.direction == USB_ENDPOINT_DIRECTION_In) {
+                                device->keyboard.interrupt_in_endpoint = endpoint_number;
+                                device->keyboard.interrupt_in_packet_size = packet_size;
+                                device->keyboard.interval = endpoint->interval;
+                                device->keyboard.supported = validate_keyboard_interface(&device->keyboard);
+                            }
+                        }
+                        break;
+
+                    case USB_INTERFACE_Mass_Storage:
+                        if (endpoint->attributes.transfer_type == USB_TRANSFER_TYPE_Bulk) {
+                            if (endpoint->address.direction == USB_ENDPOINT_DIRECTION_In) {
+                                device->mass_storage.bulk_in_endpoint = endpoint_number;
+                                device->mass_storage.bulk_in_packet_size = packet_size;
+                                device->mass_storage.supported = validate_mass_storage_interface(&device->mass_storage);
+                            } else {
+                                device->mass_storage.bulk_out_endpoint = endpoint_number;
+                                device->mass_storage.bulk_out_packet_size = packet_size;
+                                device->mass_storage.supported = validate_mass_storage_interface(&device->mass_storage);
+                            }
+                        }
+                        break;
+
+                    case USB_INTERFACE_COUNT:
+                        break;
                 }
             } break;
         }
     }
 
-    return device->bulk_in_endpoint != INVALID_ENDPOINT && device->bulk_out_endpoint != INVALID_ENDPOINT;
+    return true;
 }
 
 static
@@ -291,7 +351,7 @@ b8 configure_device(USB_Device *device) {
     //
     // Parse the endpoint configuration for this device
     //
-    if(!parse_configuration_payload(device, payload, configuration_descriptor.total_length)) {
+    if (!parse_configuration_payload(device, payload, configuration_descriptor.total_length)) {
         return false;
     }
 
@@ -308,10 +368,34 @@ b8 configure_device(USB_Device *device) {
         return false;
     }
 
-    if(!hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_in_endpoint, HCI_DIRECTION_In, device->bulk_in_packet_size) ||
-        !hci_configure_endpoint_direction(&device->hci, device->address, device->bulk_out_endpoint, HCI_DIRECTION_Out, device->bulk_out_packet_size)) {
-        return false;
+    //
+    // Configure the endpoints for each supported feature of the USB device
+    //
+
+    if (device->keyboard.supported) {
+        USB_Request_Packet set_protocol = {
+            .header = request_header(USB_REQUEST_DIRECTION_Host_To_Device, USB_REQUEST_TYPE_Class, USB_REQUEST_RECIPIENT_Interface),
+            .request = USB_REQUEST_Set_Protocol,
+            .index = device->keyboard.interface_number,
+            .value = USB_PROTOCOL_Boot,
+        };
+
+        if (hci_control_write(&device->hci, device->address, &set_protocol, sizeof(set_protocol), null, 0) != 0) {
+            return false;
+        }
+
+        if (!hci_configure_endpoint_direction(&device->hci, device->address, device->keyboard.interrupt_in_endpoint, HCI_DIRECTION_In, device->keyboard.interrupt_in_packet_size)) {
+            return false;
+        }
     }
+
+    if (device->mass_storage.supported) {
+        if(!hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_in_endpoint, HCI_DIRECTION_In, device->mass_storage.bulk_in_packet_size) ||
+            !hci_configure_endpoint_direction(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, HCI_DIRECTION_Out, device->mass_storage.bulk_out_packet_size)) {
+            return false;
+        }
+    }
+
 
     return true;
 }
@@ -328,18 +412,29 @@ USB_Device *usb_allocate_device(void) {
 
 b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_idx) {
     *device = (USB_Device) {
-        .hci               = hci,
-        .address           = port_idx + 1,
-        .bulk_in_endpoint  = INVALID_ENDPOINT,
-        .bulk_out_endpoint = INVALID_ENDPOINT,
+        .hci     = hci,
+        .address = port_idx + 1,
+        .keyboard = {
+            .interface_number = USB_INVALID_INTERFACE,
+            .interrupt_in_endpoint = USB_INVALID_ENDPOINT,
+        },
+        .mass_storage = {
+            .interface_number  = USB_INVALID_INTERFACE,
+            .bulk_in_endpoint  = USB_INVALID_ENDPOINT,
+            .bulk_out_endpoint = USB_INVALID_ENDPOINT,
+        },
     };
 
-    if(!configure_host_endpoints(device, port_idx)) {
+    if (!configure_host_endpoints(device, port_idx)) {
         return false;
     }
 
-    if(!configure_device(device)) {
+    if (!configure_device(device)) {
         return false;
+    }
+
+    if (device->keyboard.supported) {
+        hci_initialize_keyboard_report(&device->hci, device->address, device->keyboard.interrupt_in_endpoint);
     }
 
     return true;
