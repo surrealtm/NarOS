@@ -146,6 +146,7 @@ typedef struct UHCI_Port {
 typedef struct UHCI_Controller {
     UHCI_Frame_List_Entry frame_list[UHCI_FRAME_LIST_CAPACITY] ALIGN_DECLARATION(4096);
     u32 pci_address;
+    u8 interrupt_signal;
     UHCI_Port ports[UHCI_PORT_CAPACITY];
     UHCI_Device devices[UHCI_DEVICE_CAPACITY];
 
@@ -563,8 +564,9 @@ void uhci_interrupt(void) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address) {
-    controller->pci_address     = pci_address;
+b8 uhci_initialize_controller(UHCI_Controller *controller, const u32 pci_address, const u8 interrupt_signal) {
+    controller->pci_address      = pci_address;
+    controller->interrupt_signal = interrupt_signal;
 
     for(u32 device_idx = 0; device_idx < UHCI_DEVICE_CAPACITY; ++device_idx) {
         for(u32 endpoint_idx = 0; endpoint_idx < UHCI_ENDPOINT_CAPACITY; ++endpoint_idx) {
@@ -613,7 +615,7 @@ b8 uhci_initialize_keyboard_report(UHCI_Controller *controller, const u8 device_
     controller->keyboard_device_idx = device_idx;
     controller->keyboard_endpoint_idx = endpoint_idx;
     enqueue_keyboard_report(controller);
-    interrupt_register_callback(INTERRUPT_SIGNAL_UHCI, uhci_interrupt);
+    interrupt_register_callback(controller->interrupt_signal, uhci_interrupt);
     enable_uhci_interrupts(controller);
     return true;
 }

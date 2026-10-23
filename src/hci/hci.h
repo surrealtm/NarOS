@@ -17,7 +17,7 @@ typedef enum HCI_Direction {
     HCI_DIRECTION_COUNT = 2,
 } HCI_Direction;
 
-typedef b8(*HCI_Initialize_Controller)(void *controller_impl,  u32 pci_adddress);
+typedef b8(*HCI_Initialize_Controller)(void *controller_impl, u32 pci_address, u8 interrupt_signal);
 typedef b8(*HCI_Initialize_Keyboard_Report)(void *controller_impl, u8 device_idx, u8 endpoint_idx);
 typedef s32(*HCI_Get_Port_Capacity)(void *controller_impl);
 typedef HCI_Device_Speed(*HCI_Get_Port_Speed)(void *controller_impl,  u8 port_idx);
@@ -50,10 +50,11 @@ typedef struct HCI_Controller {
 } HCI_Controller;
 
 /**
- * Initializes the controller structure and configures the hardware controller at the given pci address.
+ * Initializes the controller structure and configures the hardware controller at the given PCI address.
+ * `interrupt_signal` is the PIC-remapped PCI interrupt line for this controller.
  * Returns true if the hardware controller was successfully reset and enabled
  */
-b8 hci_initialize_controller(const HCI_Controller *controller, u32 pci_address);
+b8 hci_initialize_controller(const HCI_Controller *controller, u32 pci_address, u8 interrupt_signal);
 
 /**
  * Initializes the host-controller-level keyboard report parsing.
