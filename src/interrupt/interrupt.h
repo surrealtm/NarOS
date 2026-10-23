@@ -10,7 +10,7 @@ typedef enum Interrupt_Signal {
 } Interrupt_Signal;
 
 void interrupt_initialize(void);
-void interrupt_register_callback(Interrupt_Signal signal, Interrupt_Callback callback);
+void interrupt_register_callback(u32 signal, Interrupt_Callback callback);
 u64 interrupt_get_tick(void);
 u64 interrupt_ticks_from_nanoseconds(u64 nanoseconds);
 
