@@ -3,7 +3,7 @@
 #include "input.h"
 
 /**
- * Initializes the entire input system
+ * Initializes the input sub-system.
  */
 void input_initialize(void);
 

@@ -3,7 +3,7 @@
 
 #define PIT_HZ 1193180LL
 #define TICKS_PER_SECOND 1000LL
-#define NANOSECONDS_TO_SECONDS 1000000000LL
+#define NANOSECONDS_PER_SECONDS 1000000000LL
 #define INTERRUPT_DESCRIPTOR_COUNT 256
 #define INTERRUPT_CALLBACK_CAPACITY 4
 
@@ -177,5 +177,9 @@ u64 interrupt_get_tick(void) {
 }
 
 u64 interrupt_ticks_from_nanoseconds(const u64 nanoseconds) {
-    return (nanoseconds * TICKS_PER_SECOND) / NANOSECONDS_TO_SECONDS;
+    return (nanoseconds * TICKS_PER_SECOND) / NANOSECONDS_PER_SECONDS;
+}
+
+u64 interrupt_nanoseconds_from_ticks(const u64 ticks) {
+    return (ticks / TICKS_PER_SECOND) * NANOSECONDS_PER_SECONDS;
 }

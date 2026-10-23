@@ -34,20 +34,20 @@ static
 OS_Input_Keyboard_Modifiers input_modifiers_from_report(const HID_Keyboard_Report report) {
     OS_Input_Keyboard_Modifiers modifiers = 0;
 
-    if (report.modifiers & (HID_KEYBOARD_REPORT_MODIFIERS_Left_Control | HID_KEYBOARD_REPORT_MODIFIERS_Right_Control)) {
+    if (report.modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Control) {
         modifiers |= OS_INPUT_KEYBOARD_MODIFIERS_Control;
     }
 
-    if (report.modifiers & (HID_KEYBOARD_REPORT_MODIFIERS_Left_Shift | HID_KEYBOARD_REPORT_MODIFIERS_Right_Shift)) {
+    if (report.modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Shift) {
         modifiers |= OS_INPUT_KEYBOARD_MODIFIERS_Shift;
     }
 
-    if (report.modifiers & (HID_KEYBOARD_REPORT_MODIFIERS_Right_Alt)) {
+    if (report.modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Right_Alt) {
         modifiers |= OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt;
     }
 
-    if (report.modifiers & (HID_KEYBOARD_REPORT_MODIFIERS_Left_Super | HID_KEYBOARD_REPORT_MODIFIERS_Right_Super)) {
-        // @Incomplete: Super modifier missing in the input system
+    if (report.modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Super) {
+        modifiers |= OS_INPUT_KEYBOARD_MODIFIERS_Super;
     }
 
     return modifiers;

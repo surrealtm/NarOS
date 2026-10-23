@@ -133,7 +133,8 @@ typedef enum OS_Input_Keyboard_Modifiers {
     OS_INPUT_KEYBOARD_MODIFIERS_None      = 0x0,
     OS_INPUT_KEYBOARD_MODIFIERS_Shift     = 0x1,
     OS_INPUT_KEYBOARD_MODIFIERS_Control   = 0x2,
-    OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt = 0x4,
+    OS_INPUT_KEYBOARD_MODIFIERS_Super     = 0x4,
+    OS_INPUT_KEYBOARD_MODIFIERS_Right_Alt = 0x8,
 } OS_Input_Keyboard_Modifiers;
 
 typedef struct OS_Input_Keyboard_Event {
