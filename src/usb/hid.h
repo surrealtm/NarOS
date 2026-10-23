@@ -23,6 +23,6 @@ typedef struct HID_Keyboard_Report {
     const u8 modifiers; // Combination of HID_Keyboard_Report_Modifiers
     const u8 reserved;
     const u8 keys[HID_KEYBOARD_REPORT_KEY_COUNT]; // A set of currently pressed keys
-} ALIGN_DECLARATION(16) HID_Keyboard_Report; // @Cleanup: Move the alignment to the storage in the host controller interface. Other references of this struct don't need to be aligned
+} HID_Keyboard_Report;
 
 void hid_parse_keyboard_report(HID_Keyboard_Report report);

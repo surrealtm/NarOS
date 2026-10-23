@@ -13,7 +13,6 @@ BUILD_DIR=build/
 IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
-USB_KEYBOARD=false
 CHECK_HEADERS=false
 COMPILER="clang"
 ASSEMBLER="nasm"
@@ -46,10 +45,6 @@ for ARGUMENT in "$@"; do
 
     --debug)
         DEBUG_QEMU=true
-        ;;
-
-    --usb-keyboard)
-        USB_KEYBOARD=true
         ;;
 
     --check-headers)
@@ -257,9 +252,7 @@ if [[ ${DEBUG_QEMU} == true || ${RUN_QEMU} == true ]]; then
     QEMU_USB_PARAMETERS+=" -drive file=${HOST_PATH},format=raw,if=none,id=usbdisk -device usb-storage,drive=usbdisk"
 
     # Mount a virtual keyboard through USB
-    if [[ ${USB_KEYBOARD} == true ]]; then
-        QEMU_USB_PARAMETERS+=" -device usb-kbd,bus=uhci.0"
-    fi
+    QEMU_USB_PARAMETERS+=" -device usb-kbd,bus=xhci.0"
 fi
 
 # ----------------------------------------------------------------------------------------------------------------

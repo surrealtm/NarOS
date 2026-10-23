@@ -19,7 +19,7 @@ b8 is_key_pressed(const Parsed_Keyboard_Report report, const OS_Input_Key_Code k
 
 static
 OS_Input_Key_Code key_code_from_hid(const u8 hid, const HID_Keyboard_Report_Modifiers modifiers) {
-    const Hid_Key_Map map = hid_layout_us[hid];
+    const HID_Key_Map map = hid_layout_us[hid];
 
     if (modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Shift) {
         return map.shift;

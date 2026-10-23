@@ -156,7 +156,7 @@ typedef struct UHCI_Controller {
 
     UHCI_Queue_Head keyboard_queue_head;
     UHCI_Transfer_Descriptor keyboard_transfer_descriptor ALIGN_DECLARATION(16);
-    HID_Keyboard_Report keyboard_report;
+    HID_Keyboard_Report keyboard_report ALIGN_DECLARATION(16);
     u8 keyboard_device_idx;
     u8 keyboard_endpoint_idx;
 } UHCI_Controller;

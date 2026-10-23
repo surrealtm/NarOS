@@ -133,7 +133,7 @@ typedef struct XHCI_Controller {
     XHCI_Device *keyboard_device;
     XHCI_TRB *keyboard_transfer;
     u8 keyboard_endpoint_id;
-    HID_Keyboard_Report keyboard_report;
+    HID_Keyboard_Report keyboard_report ALIGN_DECLARATION(16);
 } XHCI_Controller;
 
 static XHCI_Controller xhci_controllers[XHCI_MAX_CONTROLLERS];
