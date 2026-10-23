@@ -43,6 +43,8 @@ typedef enum OS_Input_Key_Code {
     OS_INPUT_KEY_F8,
     OS_INPUT_KEY_F9,
     OS_INPUT_KEY_F10,
+    OS_INPUT_KEY_F11,
+    OS_INPUT_KEY_F12,
 
     /* Printable Special Characters */
     OS_INPUT_KEY_Space,
@@ -156,6 +158,11 @@ typedef struct OS_Input_Event {
  * Sets the scan code mapping table to reflect the requested keyboard layout.
  */
 void os_input_set_keyboard_layout(OS_Input_Keyboard_Layout layout);
+
+/**
+ * Returns the currently active keyboard layout.
+ */
+OS_Input_Keyboard_Layout os_input_get_keyboard_layout(void);
 
 /**
  * Checks if there's currently any input event available to be popped

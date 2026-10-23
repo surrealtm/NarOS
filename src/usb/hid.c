@@ -9,6 +9,16 @@ typedef struct Parsed_Keyboard_Report {
 
 static Parsed_Keyboard_Report previous_keyboard_report = { 0 };
 
+static inline
+const HID_Key_Map *get_active_key_map(void) {
+    switch(os_input_get_keyboard_layout()) {
+        case OS_INPUT_KEYBOARD_LAYOUT_Standard_US: return hid_layout_standard_us;
+        case OS_INPUT_KEYBOARD_LAYOUT_German: return hid_layout_german;
+    }
+
+    return hid_layout_standard_us;
+}
+
 static
 b8 is_key_pressed(const Parsed_Keyboard_Report report, const OS_Input_Key_Code key_code) {
     for (u32 key_idx = 0; key_idx < ARRAY_COUNT(report.pressed_keys); ++key_idx) {
@@ -19,7 +29,7 @@ b8 is_key_pressed(const Parsed_Keyboard_Report report, const OS_Input_Key_Code k
 
 static
 OS_Input_Key_Code key_code_from_hid(const u8 hid, const HID_Keyboard_Report_Modifiers modifiers) {
-    const HID_Key_Map map = hid_layout_us[hid];
+    const HID_Key_Map map = get_active_key_map()[hid];
 
     if (modifiers & HID_KEYBOARD_REPORT_MODIFIERS_Shift) {
         return map.shift;

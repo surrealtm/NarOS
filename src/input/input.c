@@ -118,6 +118,10 @@ void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
     keyboard_state.layout = layout;
 }
 
+OS_Input_Keyboard_Layout os_input_get_keyboard_layout(void) {
+    return keyboard_state.layout;
+}
+
 b8 os_input_has_event(void) {
     return event_buffer.read_idx != event_buffer.write_idx;
 }

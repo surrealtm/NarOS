@@ -29,6 +29,7 @@ int kernel_entry_point(const Boot_Info boot_info) {
     acpi_initialize();
     pci_initialize();
 
+    os_input_set_keyboard_layout(OS_INPUT_KEYBOARD_LAYOUT_German);
     os_output_print(str8("This is a formatted print output, %s!\n"), str8("This is my string!"));
 
     terminal_run();
