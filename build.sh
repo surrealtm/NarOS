@@ -269,6 +269,12 @@ QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PAR
 
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
+
+    if [[ -z $TERMINAL ]]; then
+        echo " !!! The \$TERMINAL environment variable is not set on this machine !!!"
+        exit 1
+    fi
+
     $TERMINAL -e gdb \
         -ex "set confirm off" \
         -ex "file ${BUILD_DIR}kernel.elf" \

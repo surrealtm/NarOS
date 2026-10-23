@@ -6,6 +6,8 @@
 
 #define EVENT_QUEUE_CAPACITY 128
 
+// @Incomplete: Handle repeated input presses for keys...
+
 typedef struct Event_Buffer {
     OS_Input_Event data[EVENT_QUEUE_CAPACITY];
     u32 read_idx;
