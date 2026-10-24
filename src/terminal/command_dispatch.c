@@ -72,7 +72,7 @@ s32 cmd_block_devices(void) {
         const Block_Device *device = &devices[device_idx];
         Block_Device_Metadata metadata;
         if (block_device_get_metadata(device, &metadata)) {
-            os_output_print(str8("Device: %s\n"), str8_from_array(metadata.device_name));
+            os_output_print(str8("Device: %c (%s)\n"), device->key.identifier, str8_from_array(metadata.device_name));
             os_output_print(str8("  Block Size: %d, Block Count: %d\n"), metadata.block_size_in_bytes, metadata.block_count);
             os_output_print(str8("   -> Capacity: %d\n"), metadata.block_size_in_bytes * metadata.block_count);
         } else {

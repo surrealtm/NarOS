@@ -255,7 +255,6 @@ b8 get_metadata(const struct USB_Device *device, Block_Device_Metadata *result) 
     (void) scsi_write;
     (void) scsi_read;
 
-
     SCSI_Inquiry inquiry = { 0 };
     if(!scsi_inquire(device, &inquiry)) return false;
 
@@ -282,9 +281,10 @@ void scsi_register_block_device(const struct USB_Device *device) {
     SCSI_Read_Capacity read_capacity;
     if (!scsi_read_capacity(device, &read_capacity)) return;
 
-    Block_Device *block = block_device_allocate();
-    *block = (Block_Device) {
+    Block_Device_Interface interface = {
         (void *) device,
         (Block_Device_Get_Metadata) get_metadata,
     };
+
+    block_device_allocate(interface);
 }
