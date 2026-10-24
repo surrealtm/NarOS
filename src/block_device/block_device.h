@@ -6,6 +6,8 @@ struct Block_Device;
 
 typedef struct Block_Device_Metadata {
     char device_name[128];
+    u32 block_size_in_bytes;
+    u32 block_count;
 } Block_Device_Metadata;
 
 typedef b8(*Block_Device_Get_Metadata)(struct Block_Device *device, Block_Device_Metadata *result);

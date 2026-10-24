@@ -1,8 +1,5 @@
 #include "usb.h"
 #include "usb/scsi.h"
-#include "usb/mass_storage.h"
-
-#include "output.h"
 
 #define USB_INVALID_INTERFACE 0xff
 #define USB_INVALID_ENDPOINT U8_MAX
@@ -438,7 +435,7 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
     }
 
     if (device->mass_storage.supported) {
-        mass_storage_register_block_device(device);
+        scsi_register_block_device(device);
     }
 
     return true;
