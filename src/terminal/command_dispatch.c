@@ -20,12 +20,16 @@ static s32 cmd_quit(void);
 static s32 cmd_version(void);
 static s32 cmd_help(void);
 static s32 cmd_block_devices(void);
+static s32 cmd_read(void);
+static s32 cmd_write(void);
 
 static Command commands[] = {
     { str8_lit(":quit"),    str8_lit("Exits the kernel"), cmd_quit },
     { str8_lit(":version"), str8_lit("Prints the version of the kernel"), cmd_version },
     { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), cmd_help },
     { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), cmd_block_devices },
+    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), cmd_read },
+    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), cmd_write },
 };
 
 static
@@ -81,6 +85,75 @@ s32 cmd_block_devices(void) {
     }
 
     divider("Block Devices");
+    return 0;
+}
+
+static
+s32 cmd_read(void) {
+    const Block_Device_Key key = { 'C' };
+    const Block_Device *device = block_device_find(key);
+
+    if (!device) {
+        os_output_print(str8("No block device for %c could be found."), key.identifier);
+        return -1;
+    }
+
+    Block_Device_Metadata metadata;
+    if (!block_device_get_metadata(device, &metadata)) {
+        os_output_print(str8("Failed to obtain metadata from the block device."));
+        return -1;
+    }
+
+    char buffer[metadata.block_size_in_bytes];
+    if (!block_device_read(device, metadata.block_count - 1, buffer)) {
+        os_output_print(str8("Failed to read from the block device."));
+        return -1;
+    }
+
+    const Str8 buffer_view = str8(buffer);
+
+    s32 width, height;
+    os_display_get_resolution(&width, &height);
+
+    divider("Read");
+
+    for (s32 offset = 0; offset < buffer_view.count; ++offset) {
+        s32 batch_size = min(width, buffer_view.count - offset);
+        os_output_print(str8_substring(buffer_view, offset, offset + batch_size - 1));
+        os_output_print(str8("\n"));
+        offset += batch_size;
+    }
+
+    divider("Read");
+    return 0;
+}
+
+static
+s32 cmd_write(void) {
+    const Block_Device_Key key = { 'C' };
+    const Block_Device *device = block_device_find(key);
+
+    if (!device) {
+        os_output_print(str8("No block device for %c could be found."), key.identifier);
+        return -1;
+    }
+
+    Block_Device_Metadata metadata;
+    if (!block_device_get_metadata(device, &metadata)) {
+        os_output_print(str8("Failed to obtain metadata from the block device."));
+        return -1;
+    }
+
+    char buffer[metadata.block_size_in_bytes];
+    set_memory(buffer, 0, metadata.block_size_in_bytes);
+    const char *text = "This text was created by the :write command inside NarOS.";
+    move_memory(buffer, text, cstring_length(text));
+
+    if (!block_device_write(device, metadata.block_count - 1, buffer)) {
+        os_output_print(str8("Failed to read from the block device."));
+        return -1;
+    }
+
     return 0;
 }
 

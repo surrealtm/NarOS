@@ -5,6 +5,10 @@
 static Block_Device block_devices[MAX_BLOCK_DEVICES];
 static u32 block_device_count;
 
+b8 block_device_keys_equal(const Block_Device_Key lhs, const Block_Device_Key rhs) {
+    return compare_memory(&lhs, &rhs, sizeof(lhs)) == 0;
+}
+
 Block_Device *block_device_allocate(const Block_Device_Interface interface) {
     if(block_device_count >= MAX_BLOCK_DEVICES) {
         return null;
@@ -23,6 +27,19 @@ Block_Device *block_device_allocate(const Block_Device_Interface interface) {
 const Block_Device *block_device_enumerate(s32 *count) {
     *count = block_device_count;
     return block_devices;
+}
+
+const Block_Device *block_device_find(const Block_Device_Key key) {
+    s32 count = 0;
+    const Block_Device *devices = block_device_enumerate(&count);
+
+    for (s32 i = 0; i < count; ++i) {
+        if (block_device_keys_equal(devices[i].key, key)) {
+            return &devices[i];
+        }
+    }
+
+    return null;
 }
 
 b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result) {

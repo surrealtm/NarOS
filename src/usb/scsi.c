@@ -294,16 +294,5 @@ void scsi_register_block_device(const struct USB_Device *device) {
         (Block_Device_Write) write,
     };
 
-    {
-        // @Temporary
-        const Block_Device *device = block_device_allocate(interface);
-
-        char buffer[read_capacity.block_size_in_bytes];
-        const char *text = "Hello from the scsi block-device registration.";
-        move_memory(buffer, text, cstring_length(text));
-
-        block_device_write(device, read_capacity.logical_block_address, buffer);
-        set_memory(buffer, 0, sizeof(buffer));
-        block_device_read(device, read_capacity.logical_block_address, buffer);
-    }
+    block_device_allocate(interface);
 }

@@ -26,9 +26,15 @@ typedef struct Block_Device_Interface {
 } Block_Device_Interface;
 
 typedef struct Block_Device {
+    // @Cleanup: The metadata should be stored on here directly, it's annoying having to query these all the time...
     Block_Device_Key key;
     Block_Device_Interface interface;
 } Block_Device;
+
+/**
+ * Returns true if the two keys are equal.
+ */
+b8 block_device_keys_equal(Block_Device_Key lhs, Block_Device_Key rhs);
 
 /**
  * Returns a pointer to the persistent storage, or null if the capacity of block devices was reached.
@@ -40,6 +46,12 @@ Block_Device *block_device_allocate(Block_Device_Interface interface);
  * The size of the array is returned in `count`.
  */
 const Block_Device *block_device_enumerate(s32 *count);
+
+/**
+ * Returns the block device for the given key, or null if no such block device exists.
+ * @Robustness: Should this return a "null" block device which has stub implementations?
+ */
+const Block_Device *block_device_find(Block_Device_Key key);
 
 /**
  * Returns true if the metadata could be gathered from the device.

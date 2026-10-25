@@ -80,8 +80,8 @@ b8 str8_equals(Str8 lhs, Str8 rhs);
 void memory_barrier(void);
 void panic(Str8 reason);
 
-void set_memory(void *dst, u8 value, u32 size_in_bytes);
-void move_memory(void *dst, const void *src, u32 size_in_bytes);
+void set_memory(void *dst, u8 value, u32 size_in_bytes); // @Cleanup: Provide a clear_memory?
+void move_memory(void *dst, const void *src, u32 size_in_bytes); // @Cleanup: Rename this to copy_memory?
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);
