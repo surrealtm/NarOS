@@ -250,11 +250,7 @@ b8 scsi_write(const USB_Device *device, const u32 logical_block_address, const u
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-b8 get_metadata(const struct USB_Device *device, Block_Device_Metadata *result) {
-    // @Temporary: Only necessary until block device api has read & write
-    (void) scsi_write;
-    (void) scsi_read;
-
+b8 get_metadata(const USB_Device *device, Block_Device_Metadata *result) {
     SCSI_Inquiry inquiry = { 0 };
     if(!scsi_inquire(device, &inquiry)) return false;
 
@@ -268,6 +264,16 @@ b8 get_metadata(const struct USB_Device *device, Block_Device_Metadata *result) 
     result->block_count = read_capacity.logical_block_address + 1;
 
     return true;
+}
+
+static
+b8 read(const USB_Device *device, const u32 logical_block_address, void *destination) {
+    return scsi_read(device, logical_block_address, 1, destination);
+}
+
+static
+b8 write(const USB_Device *device, const u32 logical_block_address, const void *source) {
+    return scsi_write(device, logical_block_address, 1, source);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -284,7 +290,20 @@ void scsi_register_block_device(const struct USB_Device *device) {
     Block_Device_Interface interface = {
         (void *) device,
         (Block_Device_Get_Metadata) get_metadata,
+        (Block_Device_Read) read,
+        (Block_Device_Write) write,
     };
 
-    block_device_allocate(interface);
+    {
+        // @Temporary
+        const Block_Device *device = block_device_allocate(interface);
+
+        char buffer[read_capacity.block_size_in_bytes];
+        const char *text = "Hello from the scsi block-device registration.";
+        move_memory(buffer, text, cstring_length(text));
+
+        block_device_write(device, read_capacity.logical_block_address, buffer);
+        set_memory(buffer, 0, sizeof(buffer));
+        block_device_read(device, read_capacity.logical_block_address, buffer);
+    }
 }

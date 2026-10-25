@@ -14,11 +14,15 @@ typedef struct Block_Device_Metadata {
     u32 block_count;
 } Block_Device_Metadata;
 
-typedef b8(*Block_Device_Get_Metadata)(struct Block_Device *device, Block_Device_Metadata *result);
+typedef b8(*Block_Device_Get_Metadata)(void *interface_impl, Block_Device_Metadata *result);
+typedef b8(*Block_Device_Read)(void *interface_impl, u32 logical_block_address, void *destination);
+typedef b8(*Block_Device_Write)(void *interface_impl, u32 logical_block_address, const void *source);
 
 typedef struct Block_Device_Interface {
     void *interface_impl;
     Block_Device_Get_Metadata get_metadata;
+    Block_Device_Read read;
+    Block_Device_Write write;
 } Block_Device_Interface;
 
 typedef struct Block_Device {
@@ -42,3 +46,17 @@ const Block_Device *block_device_enumerate(s32 *count);
  * The metadata is written into `result`.
  */
 b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result);
+
+/**
+ * Attempts to read one block from the device.
+ * The destination buffer must have the capacity for one block size (obtained through the block-device's metadata).
+ * Returns whether the block-transfer was successful.
+ */
+b8 block_device_read(const Block_Device *device, u32 logical_block_address, void *destination);
+
+/**
+ * Attempts to write one block to the device.
+ * The source buffer must contain enough valid data for one block size (obtained through the block-device's metadata).
+ * Returns whether the block-transfer was successful.
+ */
+b8 block_device_write(const Block_Device *device, u32 logical_block_address, const void *source);

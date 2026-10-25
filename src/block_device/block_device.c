@@ -28,3 +28,11 @@ const Block_Device *block_device_enumerate(s32 *count) {
 b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result) {
     return device->interface.get_metadata(device->interface.interface_impl, result);
 }
+
+b8 block_device_read(const Block_Device *device, const u32 logical_block_address, void *destination) {
+    return device->interface.read(device->interface.interface_impl, logical_block_address, destination);
+}
+
+b8 block_device_write(const Block_Device *device, const u32 logical_block_address, const void *source) {
+    return device->interface.write(device->interface.interface_impl, logical_block_address, source);
+}
