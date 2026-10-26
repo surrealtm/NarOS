@@ -4,6 +4,8 @@
 
 #define HID_KEYBOARD_REPORT_KEY_COUNT 6
 
+typedef u8 HID_Key_Code;
+
 typedef enum HID_Keyboard_Report_Modifiers {
     HID_KEYBOARD_REPORT_MODIFIERS_Left_Control  = 1 << 0,
     HID_KEYBOARD_REPORT_MODIFIERS_Left_Shift    = 1 << 1,
@@ -20,9 +22,9 @@ typedef enum HID_Keyboard_Report_Modifiers {
 } HID_Keyboard_Report_Modifiers;
 
 typedef struct HID_Keyboard_Report {
-    const u8 modifiers; // Combination of HID_Keyboard_Report_Modifiers
-    const u8 reserved;
-    const u8 keys[HID_KEYBOARD_REPORT_KEY_COUNT]; // A set of currently pressed keys
+    u8 modifiers; // Combination of HID_Keyboard_Report_Modifiers
+    u8 reserved;
+    HID_Key_Code pressed_keys[HID_KEYBOARD_REPORT_KEY_COUNT];
 } HID_Keyboard_Report;
 
 void hid_parse_keyboard_report(HID_Keyboard_Report report);
