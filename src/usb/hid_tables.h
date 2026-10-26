@@ -2,8 +2,6 @@
 
 #include "input.h"
 
-#define HID_KEY_COUNT 0x100
-
 typedef struct HID_Key_Map {
     OS_Input_Key_Code normal;
     OS_Input_Key_Code shift;

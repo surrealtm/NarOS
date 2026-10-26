@@ -1,13 +1,9 @@
 #include "input.h"
 #include "input_kernel.h"
 #include "input/tables.h"
-#include "interrupt/interrupt.h"
 #include "port/port.h"
 
 #define EVENT_QUEUE_CAPACITY 128
-
-#define KEY_REPEAT_DELAY_NANOSECONDS 250000000 // After how many nanoseconds the first repetition shall occur
-#define KEY_REPEAT_RATE 20 // How many repetitions per second shall be generated for a held key
 
 typedef struct Event_Buffer {
     OS_Input_Event data[EVENT_QUEUE_CAPACITY];
@@ -17,10 +13,6 @@ typedef struct Event_Buffer {
 
 typedef struct Key_State {
     b8 down;
-    b8 repeated;
-    /* Time-tick of when the last press event was generated for this key, either through a physical press or through
-     * a repetition event */
-    u64 tick_of_last_press;
 } Key_State;
 
 typedef struct Keyboard_State {
@@ -29,7 +21,7 @@ typedef struct Keyboard_State {
     Key_State keys[OS_INPUT_KEY_COUNT];
 } Keyboard_State;
 
-static Event_Buffer event_buffer = { 0 };
+static Event_Buffer   event_buffer   = { 0 };
 static Keyboard_State keyboard_state = { 0 };
 
 static
@@ -65,26 +57,6 @@ void push_keyboard_event(const OS_Input_Key_Code key_code, const b8 down) {
     input_push_event(event);
 }
 
-static
-void check_for_repetitions(void) {
-    const u64 now = interrupt_get_tick();
-    const u64 initial_delay   = interrupt_ticks_from_nanoseconds(KEY_REPEAT_DELAY_NANOSECONDS);
-    const u64 repeat_interval = interrupt_ticks_from_nanoseconds(1000000000 / KEY_REPEAT_RATE);
-
-    for (OS_Input_Key_Code key_code = 0; key_code < OS_INPUT_KEY_COUNT; ++key_code) {
-        const u64 required_delta = (keyboard_state.keys[key_code].repeated) ? repeat_interval : initial_delay;
-        if (keyboard_state.keys[key_code].down && now - keyboard_state.keys[key_code].tick_of_last_press >= required_delta) {
-            keyboard_state.keys[key_code].tick_of_last_press = now;
-            keyboard_state.keys[key_code].repeated = true;
-            push_keyboard_event(key_code, true);
-        }
-    }
-}
-
-void input_initialize(void) {
-    interrupt_register_callback(INTERRUPT_SIGNAL_Timer, check_for_repetitions);
-}
-
 void input_push_event(const OS_Input_Event event) {
     event_buffer.data[event_buffer.write_idx] = event;
     event_buffer.write_idx = advance_index(event_buffer.write_idx);
@@ -106,12 +78,12 @@ void input_set_current_key_state(const OS_Input_Key_Code key_code, const b8 down
 
     if (keyboard_state.keys[key_code].down != down) {
         keyboard_state.keys[key_code].down = down;
-        if (down) {
-            keyboard_state.keys[key_code].tick_of_last_press = interrupt_get_tick();
-            keyboard_state.keys[key_code].repeated = false;
-        }
         push_keyboard_event(key_code, down);
     }
+}
+
+void input_trigger_key_repetition(const OS_Input_Key_Code key_code) {
+    push_keyboard_event(key_code, true);
 }
 
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {

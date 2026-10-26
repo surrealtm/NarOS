@@ -3,11 +3,6 @@
 #include "input.h"
 
 /**
- * Initializes the input sub-system.
- */
-void input_initialize(void);
-
-/**
  * Pushes a new input event onto the back of the queue
  */
 void input_push_event(OS_Input_Event event);
@@ -22,6 +17,11 @@ void input_set_current_key_modifiers(OS_Input_Keyboard_Modifiers modifiers);
  * if the key state has changed
  */
 void input_set_current_key_state(OS_Input_Key_Code key_code, b8 down);
+
+/**
+ * Emits a key-down event for the specified key code for a repetition event.
+ */
+void input_trigger_key_repetition(OS_Input_Key_Code key_code);
 
 /**
  * Returns true if the specified key is currently considered `down`
