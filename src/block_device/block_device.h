@@ -8,27 +8,22 @@ typedef struct Block_Device_Key {
     char identifier;
 } Block_Device_Key;
 
-typedef struct Block_Device_Metadata {
-    char device_name[128];
-    u32 block_size_in_bytes;
-    u32 block_count;
-} Block_Device_Metadata;
-
-typedef b8(*Block_Device_Get_Metadata)(void *interface_impl, Block_Device_Metadata *result);
 typedef b8(*Block_Device_Read)(void *interface_impl, u32 logical_block_address, void *destination);
 typedef b8(*Block_Device_Write)(void *interface_impl, u32 logical_block_address, const void *source);
 
 typedef struct Block_Device_Interface {
     void *interface_impl;
-    Block_Device_Get_Metadata get_metadata;
     Block_Device_Read read;
     Block_Device_Write write;
 } Block_Device_Interface;
 
 typedef struct Block_Device {
-    // @Cleanup: The metadata should be stored on here directly, it's annoying having to query these all the time...
     Block_Device_Key key;
     Block_Device_Interface interface;
+
+    char device_name[32];
+    u32 block_size_in_bytes;
+    u32 block_count;
 } Block_Device;
 
 /**
@@ -39,7 +34,7 @@ b8 block_device_keys_equal(Block_Device_Key lhs, Block_Device_Key rhs);
 /**
  * Returns a pointer to the persistent storage, or null if the capacity of block devices was reached.
  */
-Block_Device *block_device_allocate(Block_Device_Interface interface);
+Block_Device *block_device_allocate(Block_Device_Interface interface, Str8 device_name, u32 block_size_in_bytes, u32 block_count);
 
 /**
  * Returns a pointer to array of block devices registered.
@@ -52,12 +47,6 @@ const Block_Device *block_device_enumerate(s32 *count);
  * @Robustness: Should this return a "null" block device which has stub implementations?
  */
 const Block_Device *block_device_find(Block_Device_Key key);
-
-/**
- * Returns true if the metadata could be gathered from the device.
- * The metadata is written into `result`.
- */
-b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result);
 
 /**
  * Attempts to read one block from the device.

@@ -74,14 +74,9 @@ s32 cmd_block_devices(void) {
 
     for (s32 device_idx = 0; device_idx < device_count; ++device_idx) {
         const Block_Device *device = &devices[device_idx];
-        Block_Device_Metadata metadata;
-        if (block_device_get_metadata(device, &metadata)) {
-            os_output_print(str8("Device: %c (%s)\n"), device->key.identifier, str8_from_array(metadata.device_name));
-            os_output_print(str8("  Block Size: %d, Block Count: %d\n"), metadata.block_size_in_bytes, metadata.block_count);
-            os_output_print(str8("   -> Capacity: %d\n"), metadata.block_size_in_bytes * metadata.block_count);
-        } else {
-            os_output_print(str8(" (Misconfigured device)\n"));
-        }
+        os_output_print(str8("Device: %c (%s)\n"), device->key.identifier, str8_from_array(device->device_name));
+        os_output_print(str8("  Block Size: %d, Block Count: %d\n"), device->block_size_in_bytes, device->block_count);
+        os_output_print(str8("   -> Capacity: %d\n"), (u64) device->block_size_in_bytes * (u64) device->block_count);
     }
 
     divider("Block Devices");
@@ -98,14 +93,8 @@ s32 cmd_read(void) {
         return -1;
     }
 
-    Block_Device_Metadata metadata;
-    if (!block_device_get_metadata(device, &metadata)) {
-        os_output_print(str8("Failed to obtain metadata from the block device."));
-        return -1;
-    }
-
-    char buffer[metadata.block_size_in_bytes];
-    if (!block_device_read(device, metadata.block_count - 1, buffer)) {
+    char buffer[device->block_size_in_bytes];
+    if (!block_device_read(device, device->block_count - 1, buffer)) {
         os_output_print(str8("Failed to read from the block device."));
         return -1;
     }
@@ -138,18 +127,12 @@ s32 cmd_write(void) {
         return -1;
     }
 
-    Block_Device_Metadata metadata;
-    if (!block_device_get_metadata(device, &metadata)) {
-        os_output_print(str8("Failed to obtain metadata from the block device."));
-        return -1;
-    }
-
-    char buffer[metadata.block_size_in_bytes];
-    set_memory(buffer, 0, metadata.block_size_in_bytes);
+    char buffer[device->block_size_in_bytes];
+    set_memory(buffer, 0, device->block_size_in_bytes);
     const char *text = "This text was created by the :write command inside NarOS.";
     move_memory(buffer, text, cstring_length(text));
 
-    if (!block_device_write(device, metadata.block_count - 1, buffer)) {
+    if (!block_device_write(device, device->block_count - 1, buffer)) {
         os_output_print(str8("Failed to read from the block device."));
         return -1;
     }

@@ -250,23 +250,6 @@ b8 scsi_write(const USB_Device *device, const u32 logical_block_address, const u
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-b8 get_metadata(const USB_Device *device, Block_Device_Metadata *result) {
-    SCSI_Inquiry inquiry = { 0 };
-    if(!scsi_inquire(device, &inquiry)) return false;
-
-    *result = (Block_Device_Metadata) { 0 };
-    move_memory(result->device_name, inquiry.product, min(ARRAY_COUNT(result->device_name), ARRAY_COUNT(inquiry.product)));
-
-    SCSI_Read_Capacity read_capacity;
-    if (!scsi_read_capacity(device, &read_capacity)) return false;
-
-    result->block_size_in_bytes = read_capacity.block_size_in_bytes;
-    result->block_count = read_capacity.logical_block_address + 1;
-
-    return true;
-}
-
-static
 b8 read(const USB_Device *device, const u32 logical_block_address, void *destination) {
     return scsi_read(device, logical_block_address, 1, destination);
 }
@@ -289,10 +272,9 @@ void scsi_register_block_device(const struct USB_Device *device) {
 
     Block_Device_Interface interface = {
         (void *) device,
-        (Block_Device_Get_Metadata) get_metadata,
         (Block_Device_Read) read,
         (Block_Device_Write) write,
     };
 
-    block_device_allocate(interface);
+    block_device_allocate(interface, str8_from_array(inquiry.product), read_capacity.block_size_in_bytes, read_capacity.logical_block_address + 1);
 }

@@ -9,7 +9,7 @@ b8 block_device_keys_equal(const Block_Device_Key lhs, const Block_Device_Key rh
     return compare_memory(&lhs, &rhs, sizeof(lhs)) == 0;
 }
 
-Block_Device *block_device_allocate(const Block_Device_Interface interface) {
+Block_Device *block_device_allocate(const Block_Device_Interface interface, const Str8 device_name, const u32 block_size_in_bytes, const u32 block_count) {
     if(block_device_count >= MAX_BLOCK_DEVICES) {
         return null;
     }
@@ -20,6 +20,9 @@ Block_Device *block_device_allocate(const Block_Device_Interface interface) {
     ZERO_STRUCT(device);
     device->key = key;
     device->interface = interface;
+    move_memory(device->device_name, device_name.data, min((s32) ARRAY_COUNT(device->device_name), device_name.count));
+    device->block_size_in_bytes = block_size_in_bytes;
+    device->block_count = block_count;
     ++block_device_count;
     return device;
 }
@@ -40,10 +43,6 @@ const Block_Device *block_device_find(const Block_Device_Key key) {
     }
 
     return null;
-}
-
-b8 block_device_get_metadata(const Block_Device *device, Block_Device_Metadata *result) {
-    return device->interface.get_metadata(device->interface.interface_impl, result);
 }
 
 b8 block_device_read(const Block_Device *device, const u32 logical_block_address, void *destination) {
