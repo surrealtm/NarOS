@@ -19,6 +19,11 @@ void input_set_current_key_modifiers(OS_Input_Keyboard_Modifiers modifiers);
 void input_set_current_key_state(OS_Input_Key_Code key_code, b8 down);
 
 /**
+ * Emits a key-down event for the specified key code for a repetition event.
+ */
+void input_trigger_key_repetition(OS_Input_Key_Code key_code);
+
+/**
  * Returns true if the specified key is currently considered `down`
  */
 b8 input_get_current_key_state(OS_Input_Key_Code key_code);

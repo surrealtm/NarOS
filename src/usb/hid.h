@@ -3,6 +3,7 @@
 #include "base.h"
 
 #define HID_KEYBOARD_REPORT_KEY_COUNT 6
+#define HID_KEY_COUNT 0x100
 
 typedef u8 HID_Key_Code;
 

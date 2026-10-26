@@ -1,7 +1,6 @@
 #include "input.h"
 #include "input_kernel.h"
 #include "input/tables.h"
-#include "interrupt/interrupt.h"
 #include "port/port.h"
 
 #define EVENT_QUEUE_CAPACITY 128
@@ -81,6 +80,10 @@ void input_set_current_key_state(const OS_Input_Key_Code key_code, const b8 down
         keyboard_state.keys[key_code].down = down;
         push_keyboard_event(key_code, down);
     }
+}
+
+void input_trigger_key_repetition(const OS_Input_Key_Code key_code) {
+    push_keyboard_event(key_code, true);
 }
 
 void os_input_set_keyboard_layout(const OS_Input_Keyboard_Layout layout) {
