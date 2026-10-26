@@ -1,4 +1,5 @@
 #include "scsi.h"
+#include "block_device/block_device.h"
 #include "hci/hci.h"
 #include "usb/usb.h"
 
@@ -6,6 +7,10 @@
 #define COMMAND_STATUS_WRAPPER_SIGNATURE 0x53425355
 
 #define EXTRACT_BYTE(value, byte_idx) (((u8 *) &(value))[byte_idx])
+
+// ---------------------------------------------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------------------------------------------
 
 typedef enum SCSI_Command {
     SCSI_COMMAND_Test_Unit_Ready   = 0x00,
@@ -96,7 +101,56 @@ typedef struct SCSI_Command_Write {
     const u8 control;
 } PACKED_STRUCT SCSI_Command_Write;
 
+typedef struct SCSI_Inquiry {
+    const u8 peripheral_device_type : 5;
+    const u8 peripheral_qualifier : 3;
+    const u8 device_type_modifier : 7;
+    const u8 rmb : 1;
+    const u8 ansi_approved_version : 3;
+    const u8 ecma_version : 3;
+    const u8 iso_version : 2;
+    const u8 response_data_format : 4;
+    const u8 reserved_0 : 2;
+    const u8 trm_iop: 1;
+    const u8 aenc : 1;
+    const u8 additional_length;
+    const u8 reserved_1[2];
+    const u8 sft_re : 1;
+    const u8 cmd_queue : 1;
+    const u8 reserved_2 : 1;
+    const u8 linked : 1;
+    const u8 sync : 1;
+    const u8 wbus16 : 1;
+    const u8 wbus32 : 1;
+    const u8 relative_address : 1;
+    const char vendor[8];
+    const char product[16];
+    const char revision[4];
+} PACKED_STRUCT SCSI_Inquiry;
+
+typedef struct SCSI_Read_Capacity {
+    u32 logical_block_address;
+    u32 block_size_in_bytes;
+} PACKED_STRUCT SCSI_Read_Capacity;
+
 static u32 scsi_tag = 1;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------------------------------------------
+
+static b8 scsi_read_capacity(const USB_Device *device, SCSI_Read_Capacity *result);
+
+static
+s32 determine_block_sector_size(const USB_Device *device) {
+    SCSI_Read_Capacity capacity;
+    if(!scsi_read_capacity(device, &capacity)) return -1;
+    return capacity.block_size_in_bytes;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// SCSI Commands
+// ---------------------------------------------------------------------------------------------------------------
 
 static
 b8 scsi_execute(const USB_Device *device, const void *command_data, const u8 command_length, void *data, const u32 data_length, const SCSI_Direction direction) {
@@ -135,12 +189,6 @@ b8 scsi_execute(const USB_Device *device, const void *command_data, const u8 com
 }
 
 static
-s32 determine_block_sector_size(const USB_Device *device) {
-    SCSI_Read_Capacity capacity;
-    if(!scsi_read_capacity(device, &capacity)) return -1;
-    return capacity.block_size_in_bytes;
-}
-
 b8 scsi_inquire(const USB_Device *device, SCSI_Inquiry *result) {
     if (!device->mass_storage.supported) return false;
 
@@ -152,6 +200,7 @@ b8 scsi_inquire(const USB_Device *device, SCSI_Inquiry *result) {
     return scsi_execute(device, &inquiry, sizeof(inquiry), result, sizeof(*result), SCSI_DIRECTION_To_Host);
 }
 
+static
 b8 scsi_read_capacity(const USB_Device *device, SCSI_Read_Capacity *result) {
     if (!device->mass_storage.supported) return false;
 
@@ -168,6 +217,7 @@ b8 scsi_read_capacity(const USB_Device *device, SCSI_Read_Capacity *result) {
     return true;
 }
 
+static
 b8 scsi_read(const USB_Device *device, const u32 logical_block_address, const u16 block_count, void *data) {
     if (!device->mass_storage.supported) return false;
 
@@ -181,6 +231,7 @@ b8 scsi_read(const USB_Device *device, const u32 logical_block_address, const u1
     return scsi_execute(device, &read, sizeof(read), data, block_count * block_sector_size, SCSI_DIRECTION_To_Host);
 }
 
+static
 b8 scsi_write(const USB_Device *device, const u32 logical_block_address, const u16 number_of_blocks, const void *data) {
     if (!device->mass_storage.supported) return false;
 
@@ -192,4 +243,38 @@ b8 scsi_write(const USB_Device *device, const u32 logical_block_address, const u
 
     const u32 block_sector_size = determine_block_sector_size(device);
     return scsi_execute(device, &write, sizeof(write), (void *) data, number_of_blocks * block_sector_size, SCSI_DIRECTION_To_Device);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Block Device API
+// ---------------------------------------------------------------------------------------------------------------
+
+static
+b8 read(const USB_Device *device, const u32 logical_block_address, void *destination) {
+    return scsi_read(device, logical_block_address, 1, destination);
+}
+
+static
+b8 write(const USB_Device *device, const u32 logical_block_address, const void *source) {
+    return scsi_write(device, logical_block_address, 1, source);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------
+
+void scsi_register_block_device(const struct USB_Device *device) {
+    SCSI_Inquiry inquiry = { 0 };
+    if (!scsi_inquire(device, &inquiry)) return;
+
+    SCSI_Read_Capacity read_capacity;
+    if (!scsi_read_capacity(device, &read_capacity)) return;
+
+    Block_Device_Interface interface = {
+        (void *) device,
+        (Block_Device_Read) read,
+        (Block_Device_Write) write,
+    };
+
+    block_device_allocate(interface, str8_from_array(inquiry.product), read_capacity.block_size_in_bytes, read_capacity.logical_block_address + 1);
 }

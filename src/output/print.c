@@ -112,6 +112,11 @@ void print_string(Print_Buffer *buffer, const Str8 string) {
 static
 void print_data_type(Print_Buffer *buffer, const char data_type, va_list *arguments) {
     switch(data_type) {
+        case 'c': {
+            const char value = va_arg(*arguments, int);
+            print_character(buffer, value);
+        } break;
+
         case 'u': {
             const unsigned int value = va_arg(*arguments, unsigned int);
             print_unsigned_int(buffer, value);
@@ -125,6 +130,11 @@ void print_data_type(Print_Buffer *buffer, const char data_type, va_list *argume
         case 's': {
             const Str8 value = va_arg(*arguments, Str8);
             print_string(buffer, value);
+        } break;
+
+        default: {
+            va_arg(*arguments, unsigned int);
+            print_character(buffer, '%');
         } break;
     }
 }

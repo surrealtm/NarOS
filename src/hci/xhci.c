@@ -129,6 +129,8 @@ typedef struct XHCI_Controller {
     u64 scratchpad_array[XHCI_SCRATCHPAD_CAPACITY] ALIGN_DECLARATION(64);
     XHCI_Ring command_ring;
     XHCI_Ring event_ring;
+    XHCI_TRB pending_events[XHCI_RING_CAPACITY];
+    u32 pending_event_count;
     XHCI_ERST_Entry event_ring_segment_table ALIGN_DECLARATION(64);
     XHCI_Device *keyboard_device;
     XHCI_TRB *keyboard_transfer;
@@ -182,6 +184,18 @@ u32 trb_type(const XHCI_TRB *trb) {
 static inline
 u32 completion_code(const XHCI_TRB *trb) {
     return (trb->status >> 24) & 0xff;
+}
+
+static inline
+u32 disable_interrupts(void) {
+    u32 flags;
+    __asm__ volatile("pushfl; popl %0; cli" : "=r"(flags) :: "memory");
+    return flags;
+}
+
+static inline
+void restore_interrupts(const u32 flags) {
+    __asm__ volatile("pushl %0; popfl" :: "r"(flags) : "memory", "cc");
 }
 
 static
@@ -267,10 +281,15 @@ u8 endpoint_id(const u8 endpoint, const HCI_Direction direction) {
 
 static
 b8 event_pop(XHCI_Controller *controller, XHCI_TRB *event) {
+    /* The interrupt handler and synchronous waiters share the dequeue pointer. */
+    const u32 flags = disable_interrupts();
     XHCI_Ring *ring = &controller->event_ring;
     volatile XHCI_TRB *trb = &ring->trbs[ring->index];
     memory_barrier();
-    if(((trb->control & XHCI_TRB_Cycle) != 0) != ring->cycle) return false;
+    if(((trb->control & XHCI_TRB_Cycle) != 0) != ring->cycle) {
+        restore_interrupts(flags);
+        return false;
+    }
 
     event->parameter_low = trb->parameter_low;
     event->parameter_high = trb->parameter_high;
@@ -283,6 +302,50 @@ b8 event_pop(XHCI_Controller *controller, XHCI_TRB *event) {
     }
 
     mmio_write64(at(controller->runtime_base, 0x38), PHYSICAL_ADDRESS(&ring->trbs[ring->index]) | (1u << 3));
+    restore_interrupts(flags);
+    return true;
+}
+
+static
+void pending_event_push(XHCI_Controller *controller, const XHCI_TRB event) {
+    /* A keyboard IRQ can arrive before a command or bulk waiter reads its event. */
+    const u32 flags = disable_interrupts();
+    assert(controller->pending_event_count < XHCI_RING_CAPACITY, "xHCI pending event queue full");
+    controller->pending_events[controller->pending_event_count++] = event;
+    restore_interrupts(flags);
+}
+
+static
+b8 pending_event_take(XHCI_Controller *controller, const u32 type, const u64 pointer, XHCI_TRB *event) {
+    const u32 flags = disable_interrupts();
+    for(u32 i = 0; i < controller->pending_event_count; ++i) {
+        const XHCI_TRB *candidate = &controller->pending_events[i];
+        const u64 candidate_pointer = ((u64)candidate->parameter_high << 32) | candidate->parameter_low;
+        if(trb_type(candidate) != type || (pointer && candidate_pointer != pointer)) continue;
+
+        *event = *candidate;
+        for(u32 j = i + 1; j < controller->pending_event_count; ++j) {
+            controller->pending_events[j - 1] = controller->pending_events[j];
+        }
+        --controller->pending_event_count;
+        restore_interrupts(flags);
+        return true;
+    }
+    restore_interrupts(flags);
+    return false;
+}
+
+static void enqueue_keyboard_report(XHCI_Controller *controller);
+
+static
+b8 handle_keyboard_event(XHCI_Controller *controller, const XHCI_TRB *event) {
+    const u64 pointer = ((u64)event->parameter_high << 32) | event->parameter_low;
+    if(trb_type(event) != XHCI_TRB_TYPE_Transfer_Event ||
+        !controller->keyboard_transfer || pointer != PHYSICAL_ADDRESS(controller->keyboard_transfer)) return false;
+
+    const u32 code = completion_code(event);
+    if(code == 1 || code == 13) hid_parse_keyboard_report(controller->keyboard_report);
+    enqueue_keyboard_report(controller);
     return true;
 }
 
@@ -290,19 +353,20 @@ static
 b8 wait_for_event(XHCI_Controller *controller, const u32 expected_type, const u64 expected_pointer, XHCI_TRB *result) {
     for(u32 i = 0; i < WAIT_MAX_RETRIES; ++i) {
         XHCI_TRB event;
-        while(event_pop(controller, &event)) {
-            const u64 pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
-
-            if(trb_type(&event) != expected_type) continue;
-            if(expected_pointer && pointer != expected_pointer) {
-                if(expected_type == XHCI_TRB_TYPE_Transfer_Event && completion_code(&event) != 1 && completion_code(&event) != 13) {
-                    return false;
-                }
-                continue;
-            }
-
+        if(pending_event_take(controller, expected_type, expected_pointer, &event)) {
             if(result) *result = event;
             return completion_code(&event) == 1 || completion_code(&event) == 13;
+        }
+
+        while(event_pop(controller, &event)) {
+            const u64 pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
+            if(trb_type(&event) == expected_type && (!expected_pointer || pointer == expected_pointer)) {
+                if(result) *result = event;
+                return completion_code(&event) == 1 || completion_code(&event) == 13;
+            }
+            if(handle_keyboard_event(controller, &event)) continue;
+            if(trb_type(&event) == XHCI_TRB_TYPE_Transfer_Event ||
+                trb_type(&event) == XHCI_TRB_TYPE_Command_Completion_Event) pending_event_push(controller, event);
         }
 
         os_ctrl_sleep(WAIT_TIME_NANOSECONDS);
@@ -395,22 +459,6 @@ void enqueue_keyboard_report(XHCI_Controller *controller) {
 }
 
 static
-void poll_keyboard_reports(XHCI_Controller *controller) {
-    XHCI_TRB event;
-    while(event_pop(controller, &event)) {
-        const u64 transfer_pointer = ((u64)event.parameter_high << 32) | event.parameter_low;
-        if(trb_type(&event) != XHCI_TRB_TYPE_Transfer_Event ||
-            transfer_pointer != PHYSICAL_ADDRESS(controller->keyboard_transfer)) continue;
-
-        const u32 code = completion_code(&event);
-        if(code == 1 || code == 13) { // Success or short packet
-            hid_parse_keyboard_report(controller->keyboard_report);
-        }
-        enqueue_keyboard_report(controller);
-    }
-}
-
-static
 void xhci_interrupt(void) {
     for(u32 i = 0; i < xhci_controller_count; ++i) {
         XHCI_Controller *controller = &xhci_controllers[i];
@@ -419,7 +467,12 @@ void xhci_interrupt(void) {
         volatile u8 *iman = at(controller->runtime_base, 0x20);
         if(!(mmio_read32(iman) & XHCI_IMAN_Interrupt_Pending)) continue;
 
-        poll_keyboard_reports(controller);
+        XHCI_TRB event;
+        while(event_pop(controller, &event)) {
+            if(handle_keyboard_event(controller, &event)) continue;
+            if(trb_type(&event) == XHCI_TRB_TYPE_Transfer_Event ||
+                trb_type(&event) == XHCI_TRB_TYPE_Command_Completion_Event) pending_event_push(controller, event);
+        }
         mmio_write32(iman, XHCI_IMAN_Interrupt_Pending | XHCI_IMAN_Interrupt_Enable);
         mmio_write32(at(controller->operational_base, 0x04), XHCI_USBSTS_Event_Interrupt);
     }

@@ -76,40 +76,6 @@ void write_character(Terminal *terminal, const char character, const OS_Display_
 }
 
 static
-u32 calculate_required_digits_for_unsigned(u64 integer) {
-    if(integer == 0) return 1;
-
-    u32 count = 0;
-    while(integer > 0) {
-        integer /= 10;
-        ++count;
-    }
-
-    return count;
-}
-
-static
-u64 radix_power(const u64 index) {
-    u64 power = 1;
-    for(u32 i = 0; i < index; ++i) power *= 10;
-    return power;
-}
-
-static
-void print_unsigned_integer(Terminal *terminal, u64 integer, const OS_Display_Color foreground, const OS_Display_Color background) {
-    const u32 number_of_digits = calculate_required_digits_for_unsigned(integer);
-    s64 index = number_of_digits - 1;
-
-    while(index >= 0) {
-        u64 power = radix_power(index);
-        u64 digit = integer / power;
-        write_character(terminal, digit + '0', foreground, background);
-        integer -= digit * power;
-        --index;
-    }
-}
-
-static
 void blit_input_string_to_screen(Str8 input_string, u32 *cursor_x, u32 *cursor_y) {
     const OS_Display_Color foreground = OS_DISPLAY_Bright_White;
     const OS_Display_Color background = OS_DISPLAY_Black;
@@ -181,8 +147,6 @@ void print_welcome_message(void) {
 }
 
 void terminal_initialize(void) {
-    (void) print_unsigned_integer;
-
     terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
     terminal.configured_foreground = OS_DISPLAY_White;
     terminal.configured_background = OS_DISPLAY_Black;

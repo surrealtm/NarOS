@@ -1,6 +1,13 @@
 #include "command_dispatch.h"
 #include "terminal.h"
 #include "ctrl.h"
+#include "output.h"
+#include "block_device/block_device.h"
+
+// @Cleanup: This should use the os_output_print functionality for formatting, or terminal_print() should support formatting...
+// @Cleanup: Error messages inside the commands should have a red color
+
+#define divider(text) terminal_print_string(str8("--------------------------- " text " ---------------------------\n"));
 
 typedef s32(*Command_Callback)(void);
 
@@ -13,11 +20,17 @@ typedef struct Command {
 static s32 cmd_quit(void);
 static s32 cmd_version(void);
 static s32 cmd_help(void);
+static s32 cmd_block_devices(void);
+static s32 cmd_read(void);
+static s32 cmd_write(void);
 
 static Command commands[] = {
     { str8_lit(":quit"),    str8_lit("Exits the kernel"), cmd_quit },
     { str8_lit(":version"), str8_lit("Prints the version of the kernel"), cmd_version },
     { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), cmd_help },
+    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), cmd_block_devices },
+    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), cmd_read },
+    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), cmd_write },
 };
 
 static
@@ -39,7 +52,7 @@ s32 cmd_version(void) {
 
 static
 s32 cmd_help(void) {
-    terminal_print_string(str8("--------------------------- Help ---------------------------\n"));
+    divider("Help");
     for(u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
         const Command command = commands[cmd_idx];
         terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
@@ -49,7 +62,82 @@ s32 cmd_help(void) {
         terminal_print_string(command.description);
         terminal_print_string(str8("\n"));
     }
-    terminal_print_string(str8("--------------------------- Help ---------------------------\n"));
+    divider("Help");
+    return 0;
+}
+
+static
+s32 cmd_block_devices(void) {
+    divider("Block Devices");
+
+    s32 device_count;
+    const Block_Device *devices = block_device_enumerate(&device_count);
+
+    for (s32 device_idx = 0; device_idx < device_count; ++device_idx) {
+        const Block_Device *device = &devices[device_idx];
+        os_output_print(str8("Device: %c (%s)\n"), device->key.identifier, str8_from_array(device->device_name));
+        os_output_print(str8("  Block Size: %d, Block Count: %d\n"), device->block_size_in_bytes, device->block_count);
+        os_output_print(str8("   -> Capacity: %d\n"), (u64) device->block_size_in_bytes * (u64) device->block_count);
+    }
+
+    divider("Block Devices");
+    return 0;
+}
+
+static
+s32 cmd_read(void) {
+    const Block_Device_Key key = { 'C' };
+    const Block_Device *device = block_device_find(key);
+
+    if (!block_device_is_valid(device)) {
+        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
+        return -1;
+    }
+
+    char buffer[device->block_size_in_bytes];
+    if (!block_device_read(device, device->block_count - 1, buffer)) {
+        os_output_print(str8("Failed to read from the block device.\n"));
+        return -1;
+    }
+
+    const Str8 buffer_view = str8(buffer);
+
+    s32 width, height;
+    os_display_get_resolution(&width, &height);
+
+    divider("Read");
+
+    for (s32 offset = 0; offset < buffer_view.count; ++offset) {
+        s32 batch_size = min(width, buffer_view.count - offset);
+        os_output_print(str8_substring(buffer_view, offset, offset + batch_size - 1));
+        os_output_print(str8("\n"));
+        offset += batch_size;
+    }
+
+    divider("Read");
+    return 0;
+}
+
+static
+s32 cmd_write(void) {
+    const Block_Device_Key key = { 'D' };
+    const Block_Device *device = block_device_find(key);
+
+    if (!block_device_is_valid(device)) {
+        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
+        return -1;
+    }
+
+    char buffer[device->block_size_in_bytes];
+    set_memory(buffer, 0, device->block_size_in_bytes);
+    const char *text = "This text was created by the :write command inside NarOS.";
+    move_memory(buffer, text, cstring_length(text));
+
+    if (!block_device_write(device, device->block_count - 1, buffer)) {
+        os_output_print(str8("Failed to read from the block device.\n"));
+        return -1;
+    }
+
     return 0;
 }
 

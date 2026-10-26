@@ -15,7 +15,6 @@ typedef struct USB_Keyboard_Interface {
     u8 interrupt_in_endpoint;
     u16 interrupt_in_packet_size;
     u8 interval;
-    u8 previous_report[8];
 } USB_Keyboard_Interface;
 
 typedef struct USB_Mass_Storage_Interface {

@@ -1,8 +1,6 @@
 #include "usb.h"
 #include "usb/scsi.h"
 
-#include "output.h"
-
 #define USB_INVALID_INTERFACE 0xff
 #define USB_INVALID_ENDPOINT U8_MAX
 #define CONFIGURATION_PAYLOAD_CAPACITY 240
@@ -396,7 +394,6 @@ b8 configure_device(USB_Device *device) {
         }
     }
 
-
     return true;
 }
 
@@ -435,6 +432,10 @@ b8 usb_initialize_device(USB_Device *device, HCI_Controller hci, const u8 port_i
 
     if (device->keyboard.supported) {
         hci_initialize_keyboard_report(&device->hci, device->address, device->keyboard.interrupt_in_endpoint);
+    }
+
+    if (device->mass_storage.supported) {
+        scsi_register_block_device(device);
     }
 
     return true;
