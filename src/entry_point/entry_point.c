@@ -25,7 +25,6 @@ int kernel_entry_point(const Boot_Info boot_info) {
     display_initialize(boot_info.vga_display_mode);
     terminal_initialize();
     interrupt_initialize();
-    input_initialize();
     acpi_initialize();
     pci_initialize();
 

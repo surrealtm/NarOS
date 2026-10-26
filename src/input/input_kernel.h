@@ -3,11 +3,6 @@
 #include "input.h"
 
 /**
- * Initializes the input sub-system.
- */
-void input_initialize(void);
-
-/**
  * Pushes a new input event onto the back of the queue
  */
 void input_push_event(OS_Input_Event event);
