@@ -2,8 +2,36 @@
 
 #define MAX_BLOCK_DEVICES 8
 
+static
+b8 dummy_read(void *interface_impl, const u32 logical_block_address, void *destination) {
+    (void) interface_impl;
+    (void) logical_block_address;
+    (void) destination;
+    return false;
+}
+
+static
+b8 dummy_write(void *interface_impl, const u32 logical_block_address, const void *source) {
+    (void) interface_impl;
+    (void) logical_block_address;
+    (void) source;
+    return false;
+}
+
+static Block_Device dummy_device = {
+    .interface = {
+        null,
+        dummy_read,
+        dummy_write,
+    },
+};
+
 static Block_Device block_devices[MAX_BLOCK_DEVICES];
 static u32 block_device_count;
+
+b8 block_device_is_valid(const Block_Device *device) {
+    return device->key.identifier != 0;
+}
 
 b8 block_device_keys_equal(const Block_Device_Key lhs, const Block_Device_Key rhs) {
     return compare_memory(&lhs, &rhs, sizeof(lhs)) == 0;
@@ -11,7 +39,7 @@ b8 block_device_keys_equal(const Block_Device_Key lhs, const Block_Device_Key rh
 
 Block_Device *block_device_allocate(const Block_Device_Interface interface, const Str8 device_name, const u32 block_size_in_bytes, const u32 block_count) {
     if(block_device_count >= MAX_BLOCK_DEVICES) {
-        return null;
+        return &dummy_device;
     }
 
     const Block_Device_Key key = { 'C' + block_device_count };
@@ -42,7 +70,7 @@ const Block_Device *block_device_find(const Block_Device_Key key) {
         }
     }
 
-    return null;
+    return &dummy_device;
 }
 
 b8 block_device_read(const Block_Device *device, const u32 logical_block_address, void *destination) {

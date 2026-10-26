@@ -27,12 +27,18 @@ typedef struct Block_Device {
 } Block_Device;
 
 /**
+ * Returns true if the block device is valid.
+ */
+b8 block_device_is_valid(const Block_Device *device);
+
+/**
  * Returns true if the two keys are equal.
  */
 b8 block_device_keys_equal(Block_Device_Key lhs, Block_Device_Key rhs);
 
 /**
- * Returns a pointer to the persistent storage, or null if the capacity of block devices was reached.
+ * Returns a pointer to the persistent storage, or a dummy device if the capacity of block devices was reached.
+ * Use @p block_device_is_valid to determine the success.
  */
 Block_Device *block_device_allocate(Block_Device_Interface interface, Str8 device_name, u32 block_size_in_bytes, u32 block_count);
 
@@ -43,8 +49,8 @@ Block_Device *block_device_allocate(Block_Device_Interface interface, Str8 devic
 const Block_Device *block_device_enumerate(s32 *count);
 
 /**
- * Returns the block device for the given key, or null if no such block device exists.
- * @Robustness: Should this return a "null" block device which has stub implementations?
+ * Returns the block device for the given key, or a dummy device if no such block device exists.
+ * Use @p block_device_is_valid to determine the success.
  */
 const Block_Device *block_device_find(Block_Device_Key key);
 

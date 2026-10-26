@@ -5,6 +5,7 @@
 #include "block_device/block_device.h"
 
 // @Cleanup: This should use the os_output_print functionality for formatting, or terminal_print() should support formatting...
+// @Cleanup: Error messages inside the commands should have a red color
 
 #define divider(text) terminal_print_string(str8("--------------------------- " text " ---------------------------\n"));
 
@@ -88,14 +89,14 @@ s32 cmd_read(void) {
     const Block_Device_Key key = { 'C' };
     const Block_Device *device = block_device_find(key);
 
-    if (!device) {
-        os_output_print(str8("No block device for %c could be found."), key.identifier);
+    if (!block_device_is_valid(device)) {
+        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
         return -1;
     }
 
     char buffer[device->block_size_in_bytes];
     if (!block_device_read(device, device->block_count - 1, buffer)) {
-        os_output_print(str8("Failed to read from the block device."));
+        os_output_print(str8("Failed to read from the block device.\n"));
         return -1;
     }
 
@@ -119,11 +120,11 @@ s32 cmd_read(void) {
 
 static
 s32 cmd_write(void) {
-    const Block_Device_Key key = { 'C' };
+    const Block_Device_Key key = { 'D' };
     const Block_Device *device = block_device_find(key);
 
-    if (!device) {
-        os_output_print(str8("No block device for %c could be found."), key.identifier);
+    if (!block_device_is_valid(device)) {
+        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
         return -1;
     }
 
@@ -133,7 +134,7 @@ s32 cmd_write(void) {
     move_memory(buffer, text, cstring_length(text));
 
     if (!block_device_write(device, device->block_count - 1, buffer)) {
-        os_output_print(str8("Failed to read from the block device."));
+        os_output_print(str8("Failed to read from the block device.\n"));
         return -1;
     }
 
