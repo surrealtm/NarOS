@@ -2,4 +2,4 @@
 
 #include "base.h"
 
-b8 dispatch_command(Str8 input_line);
+b8 dispatch_command_line(Str8 input_line);

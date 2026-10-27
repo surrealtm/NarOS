@@ -167,7 +167,7 @@ void terminal_run(void) {
                 terminal_print_string(str8("> "));
                 terminal_print_string(text_input_string);
                 terminal_print_string(str8("\n"));
-                if(!dispatch_command(text_input_string)) {
+                if(!dispatch_command_line(text_input_string)) {
                     terminal_set_color(OS_DISPLAY_Red, OS_DISPLAY_Black);
                     terminal_print_string(str8("Unknown command. Please try :help\n"));
                     terminal_reset_color();
