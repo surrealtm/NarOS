@@ -151,6 +151,7 @@ typedef struct Color_Mapping {
 } Color_Mapping;
 
 static Color_Mapping color_mapping[] = {
+    { str8_lit(OS_OUTPUT_COLOR_Bright_White), OS_DISPLAY_Bright_White },
     { str8_lit(OS_OUTPUT_COLOR_White), OS_DISPLAY_White },
     { str8_lit(OS_OUTPUT_COLOR_Red),   OS_DISPLAY_Red },
     { str8_lit(OS_OUTPUT_COLOR_Cyan),  OS_DISPLAY_Cyan },
