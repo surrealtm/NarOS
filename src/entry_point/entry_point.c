@@ -29,6 +29,7 @@ int kernel_entry_point(const Boot_Info boot_info) {
     pci_initialize();
 
     os_input_set_keyboard_layout(OS_INPUT_KEYBOARD_LAYOUT_German);
+    os_output_print(str8("This is some " OS_OUTPUT_COLOR_Red "red" OS_OUTPUT_COLOR_White" text. Are you linking this " OS_OUTPUT_COLOR_Cyan "cyan$white$?\n"));
 
     terminal_run();
     os_ctrl_shut_down();

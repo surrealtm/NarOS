@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v0.2.0 - unreleased
+## v0.2.0 - 27.10.2026
 
 - Added PCI and UHCI protocols for device discovery and control [!28](https://github.com/surrealtm/NarOS/pull/28)
 - Added XHCI protocol for modern USB drive control [!31](https://github.com/surrealtm/NarOS/pull/31)

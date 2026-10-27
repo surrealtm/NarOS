@@ -77,6 +77,12 @@ typedef struct Str8 {
 Str8 str8_substring(Str8 base, s32 first_idx, s32 last_idx);
 b8 str8_equals(Str8 lhs, Str8 rhs);
 
+/**
+ * Returns the index of the first occurance of the needle in the string.
+ * If this character does not appear in the string, `hay.count` is returned.
+ */
+s32 str8_find_character(Str8 hay, char needle);
+
 void memory_barrier(void);
 void panic(Str8 reason);
 

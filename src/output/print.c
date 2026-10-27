@@ -1,3 +1,5 @@
+#include "print.h"
+#include "output.h"
 #include "terminal/terminal.h"
 
 #include <stdarg.h>
@@ -139,11 +141,49 @@ void print_data_type(Print_Buffer *buffer, const char data_type, va_list *argume
     }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Color Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+typedef struct Color_Mapping {
+    const Str8 identifier;
+    const OS_Display_Color display_color;
+} Color_Mapping;
+
+static Color_Mapping color_mapping[] = {
+    { str8_lit(OS_OUTPUT_COLOR_White), OS_DISPLAY_White },
+    { str8_lit(OS_OUTPUT_COLOR_Red),   OS_DISPLAY_Red },
+    { str8_lit(OS_OUTPUT_COLOR_Cyan),  OS_DISPLAY_Cyan },
+};
+
+static
+void set_foreground_color_based_on_string(Print_Buffer *buffer, const Str8 identifier) {
+    for (u32 map_idx = 0; map_idx < ARRAY_COUNT(color_mapping); ++map_idx) {
+        if (str8_equals(color_mapping[map_idx].identifier, identifier)) {
+            flush(buffer);
+            terminal_set_color(color_mapping[map_idx].display_color, OS_DISPLAY_Black);
+            return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------
+
 void print_format(const Str8 format, va_list arguments) {
     Print_Buffer buffer = { .cursor = 0 };
 
     for (s32 i = 0; i < format.count;) {
-        if (format.data[i] == '%' && i + 1 < format.count) {
+        if (format.data[i] == '$' && i + 1 < format.count) {
+            const Str8 remaining_string = str8_substring(format, i + 1, format.count - 1);
+            const s32 end_of_color = str8_find_character(remaining_string, '$');
+            if (end_of_color < remaining_string.count) {
+                const Str8 color_identifier = str8_substring(format, i, i + end_of_color + 1);
+                set_foreground_color_based_on_string(&buffer, color_identifier);
+            }
+            i += end_of_color + 2;
+        } else if (format.data[i] == '%' && i + 1 < format.count) {
             const char data_type = format.data[i + 1];
             print_data_type(&buffer, data_type, &arguments);
             i += 2;
