@@ -49,6 +49,14 @@ b8 str8_equals(const Str8 lhs, const Str8 rhs) {
     return lhs.count == rhs.count && compare_memory(lhs.data, rhs.data, lhs.count) == 0;
 }
 
+s32 str8_find_character(const Str8 hay, const char needle) {
+    for (s32 i = 0; i < hay.count; ++i) {
+        if (hay.data[i] == needle) return i;
+    }
+
+    return hay.count;
+}
+
 void memory_barrier(void) {
     __asm__ volatile("" ::: "memory");
 }

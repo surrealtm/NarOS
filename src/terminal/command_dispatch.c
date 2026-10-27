@@ -1,13 +1,20 @@
 #include "command_dispatch.h"
-#include "terminal.h"
 #include "ctrl.h"
+#include "display.h"
 #include "output.h"
 #include "block_device/block_device.h"
 
-// @Cleanup: This should use the os_output_print functionality for formatting, or terminal_print() should support formatting...
-// @Cleanup: Error messages inside the commands should have a red color
+// ---------------------------------------------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------------------------------------------
 
-#define divider(text) terminal_print_string(str8("--------------------------- " text " ---------------------------\n"));
+#define divider(text) os_output_print(str8("--------------------------- " text " ---------------------------\n"));
+#define error_msg(message) os_output_print(str8(OS_OUTPUT_COLOR_Red message OS_OUTPUT_COLOR_White))
+#define error_fmt(format, ...) os_output_print(str8(OS_OUTPUT_COLOR_Red format OS_OUTPUT_COLOR_White), __VA_ARGS__)
+
+// ---------------------------------------------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------------------------------------------
 
 typedef s32(*Command_Callback)(void);
 
@@ -43,10 +50,10 @@ static
 s32 cmd_version(void) {
     const Str8 source_info = str8_lit("The kernel is running version " KERNEL_BUILD_TAG "." KERNEL_BUILD_COMMIT ".\n");
     const Str8 build_info = str8_lit("It was built on " KERNEL_BUILD_TIMESTAMP ".\n");
-    terminal_set_color(OS_DISPLAY_Cyan, OS_DISPLAY_Black);
-    terminal_print_string(source_info);
-    terminal_print_string(build_info);
-    terminal_reset_color();
+    os_output_print(str8(OS_OUTPUT_COLOR_Cyan));
+    os_output_print(source_info);
+    os_output_print(str8(OS_OUTPUT_COLOR_White));
+    os_output_print(build_info);
     return 0;
 }
 
@@ -55,12 +62,7 @@ s32 cmd_help(void) {
     divider("Help");
     for(u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
         const Command command = commands[cmd_idx];
-        terminal_set_color(OS_DISPLAY_Bright_White, OS_DISPLAY_Black);
-        terminal_print_string(command.name);
-        terminal_reset_color();
-        terminal_print_string(str8(" // "));
-        terminal_print_string(command.description);
-        terminal_print_string(str8("\n"));
+        os_output_print(str8(OS_OUTPUT_COLOR_Bright_White "%s" OS_OUTPUT_COLOR_White " // %s\n"), command.name, command.description);
     }
     divider("Help");
     return 0;
@@ -90,13 +92,13 @@ s32 cmd_read(void) {
     const Block_Device *device = block_device_find(key);
 
     if (!block_device_is_valid(device)) {
-        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
+        error_fmt("No block device for %c could be found.\n", key.identifier);
         return -1;
     }
 
     char buffer[device->block_size_in_bytes];
     if (!block_device_read(device, device->block_count - 1, buffer)) {
-        os_output_print(str8("Failed to read from the block device.\n"));
+        error_msg("Failed to read from the block device.\n");
         return -1;
     }
 
@@ -124,7 +126,7 @@ s32 cmd_write(void) {
     const Block_Device *device = block_device_find(key);
 
     if (!block_device_is_valid(device)) {
-        os_output_print(str8("No block device for %c could be found.\n"), key.identifier);
+        error_fmt("No block device for %c could be found.\n", key.identifier);
         return -1;
     }
 
@@ -134,12 +136,16 @@ s32 cmd_write(void) {
     move_memory(buffer, text, cstring_length(text));
 
     if (!block_device_write(device, device->block_count - 1, buffer)) {
-        os_output_print(str8("Failed to read from the block device.\n"));
+        error_msg("Failed to read from the block device.\n");
         return -1;
     }
 
     return 0;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------
 
 b8 dispatch_command(const Str8 input_line) {
     for(u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
