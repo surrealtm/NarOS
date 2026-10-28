@@ -1,5 +1,11 @@
 #include "base.h"
 
+// ---------------------------------------------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------------------------------------------
+
+// @Incomplete: Enforce the VGA video mode through the BIOS before writing characters to the screen,
+// otherwise these assumptions won't work?
 const s32 backlog_width = 80;
 const s32 backlog_height = 25;
 static volatile char * const video_memory = (char *) 0xb8000;
@@ -40,6 +46,10 @@ void render_panic_text(const Str8 text) {
     cursor_y += render_text_line(str8("Please restart your machine."), cursor_y, white_color);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// String API
+// ---------------------------------------------------------------------------------------------------------------
+
 Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
     assert(first_idx >= 0 && first_idx < base.count && last_idx >= first_idx && last_idx < base.count, "String indices are out of bounds.");
     return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
@@ -57,16 +67,44 @@ s32 str8_find_character(const Str8 hay, const char needle) {
     return hay.count;
 }
 
-void memory_barrier(void) {
-    __asm__ volatile("" ::: "memory");
+static
+s32 integer_from_character(const char character, const s32 radix, b8 *success) {
+    s32 value = 0;
+
+    if (character >= '0' && character <= '9') {
+        value = character - '0';
+    } else if (character >= 'a' && character <= 'f') {
+        value = character - 'a' + 10;
+    } else if (character >= 'A' && character <= 'F') {
+        value = character - 'A' + 10;
+    }
+
+    if (value >= radix) *success = false;
+
+    return value;
 }
 
-void panic(const Str8 reason) {
-    render_panic_text(reason);
-    for (;;) {
-        __asm__ volatile ("cli");
-        __asm__ volatile ("hlt");
+s32 s32_from_str8(const Str8 string, b8 *success) {
+    const s32 radix = 10;
+    s32 result = 0;
+    s32 power = 1;
+
+    *success = true;
+
+    for (s32 i = string.count - 1; i >= 0; --i) {
+        result += integer_from_character(string.data[i], radix, success) * power;
+        power *= radix;
     }
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Memory Utilities
+// ---------------------------------------------------------------------------------------------------------------
+
+void memory_barrier(void) {
+    __asm__ volatile("" ::: "memory");
 }
 
 void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
@@ -177,4 +215,16 @@ u16 u16_from_big_endian(const u16 src) {
     u16 dst;
     from_big_endian(&dst, &src, sizeof(u16));
     return dst;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Base
+// ---------------------------------------------------------------------------------------------------------------
+
+void panic(const Str8 reason) {
+    render_panic_text(reason);
+    for (;;) {
+        __asm__ volatile ("cli");
+        __asm__ volatile ("hlt");
+    }
 }

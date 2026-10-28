@@ -158,9 +158,9 @@ typedef struct Token {
 
 static
 Token token_from_string(const Str8 string) {
-    return (Token) {
-        .string = string,
-    };
+    Token token = { .string = string };
+    token.integer.value = s32_from_str8(token.string, &token.integer.valid);
+    return token;
 }
 
 static
@@ -172,14 +172,14 @@ void eat_whitespaces(const Str8 command_line, s32 *cursor) {
 
 static
 Token find_next_token(const Str8 command_line, s32 *cursor) {
-    const s32 token_start = *cursor;
-    const b8 enquoted = command_line.data[token_start] == '"';
+    const b8 enquoted = command_line.data[*cursor] == '"';
+    const s32 token_start = *cursor + enquoted;
     const char terminating_character = enquoted ? '"' : ' ';
     const Str8 remaining_line = str8_substring(command_line, token_start + 1, command_line.count - 1);
     const s32 needle = str8_find_character(remaining_line, terminating_character);
-    const s32 token_end = token_start + min(needle + 1, remaining_line.count); // Clamp to the length of the command line in case there's no space in the remaining line
-    *cursor = token_end + 1;
-    const Str8 string = enquoted && token_end > token_start + 1 ? str8_substring(command_line, token_start + 1, token_end - 1) : str8_substring(command_line, token_start, token_end); // Remove the quotes from the string here.
+    const s32 token_end = token_start + min(needle, remaining_line.count); // Clamp to the length of the command line in case there's no space in the remaining line
+    *cursor = token_end + 1 + enquoted;
+    const Str8 string = enquoted && token_end > token_start + 1 ? str8_substring(command_line, token_start, token_end) : str8_substring(command_line, token_start, token_end); // Remove the quotes from the string here.
     return token_from_string(string);
 }
 
@@ -214,7 +214,7 @@ b8 dispatch_command_line(const Str8 command_line) {
 
     // @Temporary
     for (s32 i = 0; i < token_count; ++i) {
-        os_output_print(str8("Token: %d, %s\n"), i, tokens[i].string);
+        os_output_print(str8("Token: %d, %s, (%d, %d)\n"), i, tokens[i].string, tokens[i].integer.value, tokens[i].integer.valid);
     }
 
     //
