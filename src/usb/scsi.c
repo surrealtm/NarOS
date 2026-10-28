@@ -163,7 +163,7 @@ b8 scsi_execute(const USB_Device *device, const void *command_data, const u8 com
         .command_length = command_length,
     };
 
-    move_memory(command_block.command_data, command_data, command_length);
+    copy_memory(command_block.command_data, command_data, command_length);
 
     if(hci_bulk_write(&device->hci, device->address, device->mass_storage.bulk_out_endpoint, &command_block, sizeof(command_block)) != sizeof(command_block)) {
         return false;

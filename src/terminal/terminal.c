@@ -38,8 +38,8 @@ void scroll_one_line(Terminal *terminal) {
     const u32 start_of_second_line = BACKBUFFER_WIDTH;
     const u32 start_of_last_line   = BACKBUFFER_WIDTH * (BACKBUFFER_HEIGHT - 1);
     const u32 one_plus_end_of_last_line = BACKBUFFER_HEIGHT * BACKBUFFER_WIDTH;
-    move_memory(&terminal->backbuffer[start_of_first_line], &terminal->backbuffer[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
-    set_memory(&terminal->backbuffer[start_of_last_line], 0, (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
+    copy_memory(&terminal->backbuffer[start_of_first_line], &terminal->backbuffer[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
+    clear_memory(&terminal->backbuffer[start_of_last_line], (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
 }
 
 static

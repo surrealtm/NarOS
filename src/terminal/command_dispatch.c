@@ -249,8 +249,8 @@ s32 cmd_write(const Str8 device_identifier, const Str8 content) {
     s32 block_idx = 0;
     for (s32 offset_in_content = 0; offset_in_content < content.count; ) {
         const s32 batch_size = min(content.count - offset_in_content, (s32) device->block_size_in_bytes);
-        move_memory(buffer, content.data + offset_in_content, batch_size);
-        set_memory(buffer + batch_size, 0, device->block_size_in_bytes - batch_size);
+        copy_memory(buffer, content.data + offset_in_content, batch_size);
+        clear_memory(buffer + batch_size, device->block_size_in_bytes - batch_size);
 
         if (!block_device_write(device, device->block_count - number_of_blocks + block_idx, buffer)) {
             error_msg("Failed to read from the block device.\n");

@@ -679,7 +679,7 @@ s32 xhci_control(XHCI_Controller *controller, const u8 device_idx, const HCI_Dir
 
     XHCI_Ring *ring = &device->control_ring;
     u64 setup = 0;
-    move_memory(&setup, header, 8);
+    copy_memory(&setup, header, 8);
 
     ring_push(ring, (XHCI_TRB) { .parameter_low = (u32)setup, .parameter_high = (u32)(setup >> 32), .status = 8, .control = XHCI_TRB_TYPE_Setup_Stage | XHCI_TRB_IDT | ((payload_size ? (direction == HCI_DIRECTION_In ? 3u : 2u) : 0u) << 16) });
 

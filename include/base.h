@@ -15,7 +15,7 @@
 #define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
 #define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
 
-#define ZERO_STRUCT(pointer) set_memory(pointer, 0, sizeof(*pointer))
+#define ZERO_STRUCT(pointer) clear_memory(pointer, sizeof(*pointer))
 
 #define true 1
 #define false 0
@@ -98,8 +98,9 @@ s32 s32_from_str8(Str8 string, b8 *success);
 /* --------------------------------------------------------------------------------------------------------------- */
 
 void memory_barrier(void);
-void set_memory(void *dst, u8 value, u32 size_in_bytes); // @Cleanup: Provide a clear_memory?
-void move_memory(void *dst, const void *src, u32 size_in_bytes); // @Cleanup: Rename this to copy_memory?
+void set_memory(void *dst, u8 value, u32 size_in_bytes);
+void clear_memory(void *dst, u32 size_in_bytes);
+void copy_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);

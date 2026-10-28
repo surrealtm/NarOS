@@ -113,7 +113,11 @@ void set_memory(void *dst, const u8 value, const u32 size_in_bytes) {
     }
 }
 
-void move_memory(void *dst, const void *src, const u32 size_in_bytes) {
+void clear_memory(void *dst, const u32 size_in_bytes) {
+    set_memory(dst, 0, size_in_bytes);
+}
+
+void copy_memory(void *dst, const void *src, const u32 size_in_bytes) {
     if(dst < src) {
         for(s64 i = 0; i < (s64) size_in_bytes; ++i) {
             ((u8 *) dst)[i] = ((u8 *) src)[i];
@@ -159,7 +163,7 @@ void memset(void *dst, const u8 value, const u32 size_in_bytes) {
 }
 
 void memcpy(void *dst, const void *src, const u32 size_in_bytes) {
-    move_memory(dst, src, size_in_bytes);
+    copy_memory(dst, src, size_in_bytes);
 }
 
 static
