@@ -26,8 +26,13 @@
 
 #define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
 
-// @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
-#define assert(condition, reason) if(!(condition)) panic(str8(reason))
+#define assert(condition, reason) if (!(condition)) panic(str8(reason))
+
+#if ENABLE_SANITY_CHECKS
+# define sanity_check(condition, reason) if (!(condition)) panic(str8(reason))
+#else
+# define sanity_check(condition, reason)
+#endif
 
 typedef unsigned long long u64;
 typedef unsigned int u32;

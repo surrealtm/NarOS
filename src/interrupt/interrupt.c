@@ -159,7 +159,7 @@ void interrupt_register_callback(const u32 signal, const Interrupt_Callback call
         return;
     }
 
-    assert(has_interrupt_handler(signal), "Tried to register a callback for an unhandled signal.");
+    sanity_check(has_interrupt_handler(signal), "Tried to register a callback for an unhandled signal.");
 
     Interrupt_Callback_List *list = &interrupt_callback_lists[signal];
     for (u32 callback_idx = 0; callback_idx < ARRAY_COUNT(list->callbacks); ++callback_idx) {

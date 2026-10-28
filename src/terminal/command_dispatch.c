@@ -346,7 +346,7 @@ b8 dispatch_command_line(const Str8 command_line) {
             const Command_Argument argument = command->arguments[argument_idx];
             if (argument.type == COMMAND_ARGUMENT_TYPE_Unused) continue;
 
-            assert(token_idx < token_count, "Mismatch in the token <-> argument handling.");
+            sanity_check(token_idx < token_count, "Mismatch in the token <-> argument handling.");
             const Token token = tokens[token_idx++];
 
             b8 valid = false;

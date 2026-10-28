@@ -51,7 +51,7 @@ void render_panic_text(const Str8 text) {
 // ---------------------------------------------------------------------------------------------------------------
 
 Str8 str8_substring(Str8 base, const s32 first_idx, const s32 last_idx) {
-    assert(first_idx >= 0 && first_idx < base.count && last_idx >= first_idx && last_idx < base.count, "String indices are out of bounds.");
+    sanity_check(first_idx >= 0 && first_idx < base.count && last_idx >= first_idx && last_idx < base.count, "String indices are out of bounds.");
     return (Str8) { base.data + first_idx, (last_idx - first_idx ) + 1 };
 }
 

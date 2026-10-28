@@ -40,7 +40,7 @@ void flush(Print_Buffer *buffer) {
 
 static
 void reserve(Print_Buffer *buffer, const u32 count) {
-    assert(count < PRINT_BUFFER_CAPACITY, "Tried to reserve more characters than the print buffer's capacity.");
+    sanity_check(count < PRINT_BUFFER_CAPACITY, "Tried to reserve more characters than the print buffer's capacity.");
     if (count + buffer->cursor > PRINT_BUFFER_CAPACITY) {
         flush(buffer);
     }
@@ -55,7 +55,7 @@ void print_character(Print_Buffer *buffer, const char character) {
 
 static
 void print_character_at_offset(Print_Buffer *buffer, const char character, const s32 offset_from_cursor) {
-    assert(buffer->cursor + offset_from_cursor < PRINT_BUFFER_CAPACITY, "Tried to write out-of-bounds of the print buffer.");
+    sanity_check(buffer->cursor + offset_from_cursor < PRINT_BUFFER_CAPACITY, "Tried to write out-of-bounds of the print buffer.");
     buffer->characters[buffer->cursor + offset_from_cursor] = character;
 }
 
