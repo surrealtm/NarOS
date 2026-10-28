@@ -5,10 +5,14 @@
 #include "block_device/block_device.h"
 
 #define COMMAND_MAX_ARGUMENTS 4
+#define COMMAND_NO_ARGS { { { 0 }, 0 } }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------------------------------------------
+
+#define CMD_SUCCESS 0
+#define CMD_FAILURE -1
 
 #define divider(text) os_output_print(str8("--------------------------- " text " ---------------------------\n"));
 #define error_msg(message) os_output_print(str8(OS_OUTPUT_COLOR_Red message OS_OUTPUT_COLOR_White))
@@ -88,12 +92,19 @@ static Str8 command_argument_type_string[] = {
 // Command Dispatch
 // ---------------------------------------------------------------------------------------------------------------
 
+static s32 cmd_clear(void);
 static s32 cmd_quit(void);
 static s32 cmd_version(void);
 static s32 cmd_help(void);
 static s32 cmd_block_devices(void);
 static s32 cmd_read(Str8, s32);
 static s32 cmd_write(Str8, Str8);
+
+static
+s32 dispatch_clear(const Token *tokens) {
+    (void) tokens;
+    return cmd_clear();
+}
 
 static
 s32 dispatch_quit(const Token *tokens) {
@@ -130,10 +141,11 @@ s32 dispatch_write(const Token *tokens) {
 }
 
 static Command commands[] = {
-    { str8_lit(":quit"),    str8_lit("Exits the kernel"), dispatch_quit, { 0 } },
-    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), dispatch_version, { 0 } },
-    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), dispatch_help, { 0 } },
-    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), dispatch_block_devices, { 0 } },
+    { str8_lit(":clear"),   str8_lit("Clears the backlog"), dispatch_clear, COMMAND_NO_ARGS },
+    { str8_lit(":quit"),    str8_lit("Exits the kernel"), dispatch_quit, COMMAND_NO_ARGS },
+    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), dispatch_version, COMMAND_NO_ARGS },
+    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), dispatch_help, COMMAND_NO_ARGS },
+    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), dispatch_block_devices, COMMAND_NO_ARGS },
     { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), dispatch_read, { { .name = str8_lit("Device"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Blocks"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
     { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), dispatch_write, { { .name = str8_lit("Device"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Content"), .type = COMMAND_ARGUMENT_TYPE_String } } },
 };
@@ -144,9 +156,15 @@ static Command commands[] = {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
+s32 cmd_clear(void) {
+    os_output_clear_backlog();
+    return CMD_SUCCESS;
+}
+
+static
 s32 cmd_quit(void) {
     os_ctrl_exit();
-    return 0;
+    return CMD_SUCCESS;
 }
 
 static
@@ -157,7 +175,7 @@ s32 cmd_version(void) {
     os_output_print(source_info);
     os_output_print(str8(OS_OUTPUT_COLOR_White));
     os_output_print(build_info);
-    return 0;
+    return CMD_SUCCESS;
 }
 
 static
@@ -168,7 +186,7 @@ s32 cmd_help(void) {
         os_output_print(str8(OS_OUTPUT_COLOR_Bright_White "%s" OS_OUTPUT_COLOR_White " // %s\n"), command.name, command.description);
     }
     divider("Help");
-    return 0;
+    return CMD_SUCCESS;
 }
 
 static
@@ -186,14 +204,14 @@ s32 cmd_block_devices(void) {
     }
 
     divider("Block Devices");
-    return 0;
+    return CMD_SUCCESS;
 }
 
 static
 s32 cmd_read(const Str8 device_identifier, const s32 number_of_blocks) {
     if (device_identifier.count != 1) {
         error_msg("Expected a single character as the device identifier.\n");
-        return -1;
+        return CMD_FAILURE;
     }
 
     const Block_Device_Key key = { device_identifier.data[0] };
@@ -201,14 +219,14 @@ s32 cmd_read(const Str8 device_identifier, const s32 number_of_blocks) {
 
     if (!block_device_is_valid(device)) {
         error_fmt("No block device for %c could be found.\n", key.identifier);
-        return -1;
+        return CMD_FAILURE;
     }
 
     const s32 bytes_to_read = device->block_size_in_bytes * number_of_blocks;
     char buffer[bytes_to_read];
     if (!block_device_read(device, device->block_count - number_of_blocks, buffer)) {
         error_msg("Failed to read from the block device.\n");
-        return -1;
+        return CMD_FAILURE;
     }
 
     const Str8 buffer_view = str8(buffer);
@@ -226,14 +244,14 @@ s32 cmd_read(const Str8 device_identifier, const s32 number_of_blocks) {
     }
 
     divider("Read");
-    return 0;
+    return CMD_SUCCESS;
 }
 
 static
 s32 cmd_write(const Str8 device_identifier, const Str8 content) {
     if (device_identifier.count != 1) {
         error_msg("Expected a single character as the device identifier.\n");
-        return -1;
+        return CMD_FAILURE;
     }
 
     const Block_Device_Key key = { device_identifier.data[0] };
@@ -241,7 +259,7 @@ s32 cmd_write(const Str8 device_identifier, const Str8 content) {
 
     if (!block_device_is_valid(device)) {
         error_fmt("No block device for %c could be found.\n", key.identifier);
-        return -1;
+        return CMD_FAILURE;
     }
 
     const s32 number_of_blocks = align(content.count, device->block_size_in_bytes);
@@ -254,14 +272,14 @@ s32 cmd_write(const Str8 device_identifier, const Str8 content) {
 
         if (!block_device_write(device, device->block_count - number_of_blocks + block_idx, buffer)) {
             error_msg("Failed to read from the block device.\n");
-            return -1;
+            return CMD_FAILURE;
         }
 
         offset_in_content += batch_size;
         block_idx += 1;
     }
 
-    return 0;
+    return CMD_SUCCESS;
 }
 
 // ---------------------------------------------------------------------------------------------------------------

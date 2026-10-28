@@ -159,6 +159,7 @@ void interrupt_register_callback(const u32 signal, const Interrupt_Callback call
         return;
     }
 
+    (void) has_interrupt_handler; // Only used for sanity checks
     sanity_check(has_interrupt_handler(signal), "Tried to register a callback for an unhandled signal.");
 
     Interrupt_Callback_List *list = &interrupt_callback_lists[signal];

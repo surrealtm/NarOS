@@ -143,10 +143,7 @@ void print_welcome_message(void) {
 }
 
 void terminal_initialize(void) {
-    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
-    terminal.configured_foreground = OS_DISPLAY_White;
-    terminal.configured_background = OS_DISPLAY_Black;
-
+    terminal_clear();
     print_welcome_message();
 }
 
@@ -188,4 +185,12 @@ void terminal_print_string(Str8 string) {
     }
 
     blit_to_screen(&terminal);
+}
+
+void terminal_clear(void) {
+    clear_memory(&terminal.backbuffer, sizeof(terminal.backbuffer));
+    terminal.backbuffer_write_x = 0;
+    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
+    terminal.configured_foreground = OS_DISPLAY_White;
+    terminal.configured_background = OS_DISPLAY_Black;
 }
