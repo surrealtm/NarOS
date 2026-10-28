@@ -15,10 +15,51 @@
 #define error_fmt(format, ...) os_output_print(str8(OS_OUTPUT_COLOR_Red format OS_OUTPUT_COLOR_White), __VA_ARGS__)
 
 // ---------------------------------------------------------------------------------------------------------------
+// Token Handling
+// ---------------------------------------------------------------------------------------------------------------
+
+typedef struct Token {
+    Str8 string;
+
+    struct {
+        int value;
+        b8 valid;
+    } integer;
+} Token;
+
+static
+Token token_from_string(const Str8 string) {
+    Token token = { .string = string };
+    token.integer.value = s32_from_str8(token.string, &token.integer.valid);
+    return token;
+}
+
+static
+void eat_whitespaces(const Str8 command_line, s32 *cursor) {
+    while (*cursor < command_line.count && command_line.data[*cursor] == ' ') {
+        ++(*cursor);
+    }
+}
+
+static
+Token find_next_token(const Str8 command_line, s32 *cursor) {
+    const b8 enquoted = command_line.data[*cursor] == '"';
+    const s32 token_start = *cursor + enquoted;
+    const char terminating_character = enquoted ? '"' : ' ';
+    const s32 start_of_remaining_line = min(token_start + 1, command_line.count - 1);
+    const Str8 remaining_line = str8_substring(command_line, start_of_remaining_line, command_line.count - 1);
+    const s32 needle = str8_find_character(remaining_line, terminating_character);
+    const s32 token_end = start_of_remaining_line + min(needle - 1, remaining_line.count - 1); // Clamp to the length of the command line in case there's no space in the remaining line
+    *cursor = token_end + 1 + enquoted;
+    const Str8 string = str8_substring(command_line, token_start, token_end);
+    return token_from_string(string);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------------------------------------------
 
-typedef s32(*Command_Callback)(void);
+typedef s32(*Command_Dispatch)(const Token *tokens, const s32 token_count);
 
 typedef enum Command_Argument_Type {
     COMMAND_ARGUMENT_TYPE_Unused,
@@ -34,9 +75,18 @@ typedef struct Command_Argument {
 typedef struct Command {
     Str8 name;
     Str8 description;
-    Command_Callback callback;
+    Command_Dispatch dispatch;
     Command_Argument arguments[COMMAND_MAX_ARGUMENTS];
 } Command;
+
+static Str8 command_argument_type_string[] = {
+    [COMMAND_ARGUMENT_TYPE_String] = str8_lit("string"),
+    [COMMAND_ARGUMENT_TYPE_Integer] = str8_lit("integer"),
+};
+
+// ---------------------------------------------------------------------------------------------------------------
+// Command Dispatch
+// ---------------------------------------------------------------------------------------------------------------
 
 static s32 cmd_quit(void);
 static s32 cmd_version(void);
@@ -45,19 +95,61 @@ static s32 cmd_block_devices(void);
 static s32 cmd_read(void);
 static s32 cmd_write(void);
 
-static Str8 command_argument_type_string[] = {
-    [COMMAND_ARGUMENT_TYPE_String] = str8_lit("string"),
-    [COMMAND_ARGUMENT_TYPE_Integer] = str8_lit("integer"),
-};
+static
+s32 dispatch_quit(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_quit();
+}
+
+static
+s32 dispatch_version(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_version();
+}
+
+static
+s32 dispatch_help(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_help();
+}
+
+static
+s32 dispatch_block_devices(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_block_devices();
+}
+
+static
+s32 dispatch_read(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_read();
+}
+
+static
+s32 dispatch_write(const Token *token, const s32 token_count) {
+    (void) token;
+    (void) token_count;
+    return cmd_write();
+}
 
 static Command commands[] = {
-    { str8_lit(":quit"),    str8_lit("Exits the kernel"), cmd_quit, { 0 } },
-    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), cmd_version, { 0 } },
-    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), cmd_help, { 0 } },
-    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), cmd_block_devices, { 0 } },
-    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), cmd_read, { { .name = str8_lit("Drive"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Bytes"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
-    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), cmd_write, { 0 } },
+    { str8_lit(":quit"),    str8_lit("Exits the kernel"), dispatch_quit, { 0 } },
+    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), dispatch_version, { 0 } },
+    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), dispatch_help, { 0 } },
+    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), dispatch_block_devices, { 0 } },
+    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), dispatch_read, { { .name = str8_lit("Drive"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Bytes"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
+    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), dispatch_write, { 0 } },
 };
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Command Implementations
+// ---------------------------------------------------------------------------------------------------------------
 
 static
 s32 cmd_quit(void) {
@@ -166,43 +258,6 @@ s32 cmd_write(void) {
 // Public API
 // ---------------------------------------------------------------------------------------------------------------
 
-typedef struct Token {
-    Str8 string;
-
-    struct {
-        int value;
-        b8 valid;
-    } integer;
-} Token;
-
-static
-Token token_from_string(const Str8 string) {
-    Token token = { .string = string };
-    token.integer.value = s32_from_str8(token.string, &token.integer.valid);
-    return token;
-}
-
-static
-void eat_whitespaces(const Str8 command_line, s32 *cursor) {
-    while (*cursor < command_line.count && command_line.data[*cursor] == ' ') {
-        ++(*cursor);
-    }
-}
-
-static
-Token find_next_token(const Str8 command_line, s32 *cursor) {
-    const b8 enquoted = command_line.data[*cursor] == '"';
-    const s32 token_start = *cursor + enquoted;
-    const char terminating_character = enquoted ? '"' : ' ';
-    const s32 start_of_remaining_line = min(token_start + 1, command_line.count - 1);
-    const Str8 remaining_line = str8_substring(command_line, start_of_remaining_line, command_line.count - 1);
-    const s32 needle = str8_find_character(remaining_line, terminating_character);
-    const s32 token_end = start_of_remaining_line + min(needle - 1, remaining_line.count - 1); // Clamp to the length of the command line in case there's no space in the remaining line
-    *cursor = token_end + 1 + enquoted;
-    const Str8 string = str8_substring(command_line, token_start, token_end);
-    return token_from_string(string);
-}
-
 static
 const Command *find_command(const Str8 name) {
     for (u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
@@ -300,8 +355,7 @@ b8 dispatch_command_line(const Str8 command_line) {
     }
 
     //
-    // Invoke the command handler
+    // Invoke the command dispatcher
     //
-
-    return true;
+    return command->dispatch(tokens, token_count) == 0;
 }
