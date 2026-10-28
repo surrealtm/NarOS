@@ -38,8 +38,8 @@ void scroll_one_line(Terminal *terminal) {
     const u32 start_of_second_line = BACKBUFFER_WIDTH;
     const u32 start_of_last_line   = BACKBUFFER_WIDTH * (BACKBUFFER_HEIGHT - 1);
     const u32 one_plus_end_of_last_line = BACKBUFFER_HEIGHT * BACKBUFFER_WIDTH;
-    move_memory(&terminal->backbuffer[start_of_first_line], &terminal->backbuffer[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
-    set_memory(&terminal->backbuffer[start_of_last_line], 0, (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
+    copy_memory(&terminal->backbuffer[start_of_first_line], &terminal->backbuffer[start_of_second_line], (one_plus_end_of_last_line - start_of_second_line) * sizeof(Cell));
+    clear_memory(&terminal->backbuffer[start_of_last_line], (one_plus_end_of_last_line - start_of_last_line) * sizeof(Cell));
 }
 
 static
@@ -52,16 +52,6 @@ void advance_cursor_vertically(Terminal *terminal) {
 }
 
 static
-void advance_cursor_horizontally(Terminal *terminal) {
-    if(terminal->backbuffer_write_x < BACKBUFFER_WIDTH - 1) {
-        ++terminal->backbuffer_write_x;
-    } else {
-        advance_cursor_vertically(terminal);
-        terminal->backbuffer_write_x = 0;
-    }
-}
-
-static
 void write_character(Terminal *terminal, const char character, const OS_Display_Color foreground, const OS_Display_Color background) {
     if(character == '\r') {
         terminal->backbuffer_write_x = 0;
@@ -69,9 +59,15 @@ void write_character(Terminal *terminal, const char character, const OS_Display_
         advance_cursor_vertically(terminal);
         terminal->backbuffer_write_x = 0;
     } else {
+        if (terminal->backbuffer_write_x == BACKBUFFER_WIDTH) {
+            advance_cursor_vertically(terminal);
+            terminal->backbuffer_write_x = 0;
+        }
+
         const u32 idx = (terminal->backbuffer_write_y * BACKBUFFER_WIDTH) + terminal->backbuffer_write_x;
         terminal->backbuffer[idx] = (Cell) { character, foreground, background };
-        advance_cursor_horizontally(terminal);
+
+        ++terminal->backbuffer_write_x;
     }
 }
 
@@ -147,10 +143,7 @@ void print_welcome_message(void) {
 }
 
 void terminal_initialize(void) {
-    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
-    terminal.configured_foreground = OS_DISPLAY_White;
-    terminal.configured_background = OS_DISPLAY_Black;
-
+    terminal_clear();
     print_welcome_message();
 }
 
@@ -167,11 +160,7 @@ void terminal_run(void) {
                 terminal_print_string(str8("> "));
                 terminal_print_string(text_input_string);
                 terminal_print_string(str8("\n"));
-                if(!dispatch_command(text_input_string)) {
-                    terminal_set_color(OS_DISPLAY_Red, OS_DISPLAY_Black);
-                    terminal_print_string(str8("Unknown command. Please try :help\n"));
-                    terminal_reset_color();
-                }
+                dispatch_command_line(text_input_string);
                 text_input_clear(&terminal.text_input);
             } break;
         }
@@ -196,4 +185,12 @@ void terminal_print_string(Str8 string) {
     }
 
     blit_to_screen(&terminal);
+}
+
+void terminal_clear(void) {
+    clear_memory(&terminal.backbuffer, sizeof(terminal.backbuffer));
+    terminal.backbuffer_write_x = 0;
+    terminal.backbuffer_write_y = BACKBUFFER_HEIGHT - 1;
+    terminal.configured_foreground = OS_DISPLAY_White;
+    terminal.configured_background = OS_DISPLAY_Black;
 }

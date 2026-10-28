@@ -38,8 +38,8 @@ u32 find_control_point_to_the_right(const Text_Input *text_input) {
 static
 void insert_text(Text_Input *text_input, const Str8 string) {
     const u32 copied_character_count = min(string.count, (s32) (ARRAY_COUNT(text_input->buffer) - text_input->count - 1)); // Ensure that the last character in the buffer remains 0 as we're working with null-terminated strings...
-    move_memory(&text_input->buffer[text_input->cursor + copied_character_count], &text_input->buffer[text_input->cursor], text_input->count - text_input->cursor);
-    move_memory(&text_input->buffer[text_input->cursor], string.data, copied_character_count);
+    copy_memory(&text_input->buffer[text_input->cursor + copied_character_count], &text_input->buffer[text_input->cursor], text_input->count - text_input->cursor);
+    copy_memory(&text_input->buffer[text_input->cursor], string.data, copied_character_count);
     text_input->cursor += copied_character_count;
     text_input->count  += copied_character_count;
 }
@@ -49,8 +49,8 @@ void erase_text(Text_Input *text_input, const u32 first_to_remove, const u32 las
     if (last_to_remove < first_to_remove || first_to_remove >= text_input->count) return;
 
     const u32 chars_to_remove = last_to_remove - first_to_remove + 1;
-    move_memory(&text_input->buffer[first_to_remove], &text_input->buffer[last_to_remove + 1], text_input->count - (last_to_remove + 1));
-    set_memory(&text_input->buffer[text_input->count - chars_to_remove], 0, chars_to_remove);
+    copy_memory(&text_input->buffer[first_to_remove], &text_input->buffer[last_to_remove + 1], text_input->count - (last_to_remove + 1));
+    clear_memory(&text_input->buffer[text_input->count - chars_to_remove], chars_to_remove);
     text_input->count -= chars_to_remove;
     text_input->cursor = first_to_remove;
 }
@@ -62,7 +62,7 @@ void text_input_initialize(Text_Input *text_input) {
 void text_input_clear(Text_Input *text_input) {
     text_input->count = 0;
     text_input->cursor = 0;
-    set_memory(text_input->buffer, 0, sizeof(text_input->buffer));
+    clear_memory(text_input->buffer, sizeof(text_input->buffer));
 }
 
 Text_Input_Signal text_input_update(Text_Input *text_input) {

@@ -15,7 +15,7 @@
 #define PHYSICAL_ADDRESS(pointer) ((u32) (pointer))
 #define VIRTUAL_ADDRESS(address)  ((void *) (u32) (address))
 
-#define ZERO_STRUCT(pointer) set_memory(pointer, 0, sizeof(*pointer))
+#define ZERO_STRUCT(pointer) clear_memory(pointer, sizeof(*pointer))
 
 #define true 1
 #define false 0
@@ -26,8 +26,13 @@
 
 #define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
 
-// @Incomplete: Provide a `sanity_check` macro which is only active in debug builds
-#define assert(condition, reason) if(!(condition)) panic(str8(reason))
+#define assert(condition, reason) if (!(condition)) panic(str8(reason))
+
+#if ENABLE_SANITY_CHECKS
+# define sanity_check(condition, reason) if (!(condition)) panic(str8(reason))
+#else
+# define sanity_check(condition, reason)
+#endif
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -66,6 +71,10 @@ STATIC_ASSERT(sizeof(f64) == 8);
 STATIC_ASSERT(sizeof(f32) == 4);
 STATIC_ASSERT(sizeof(b8)  == 1);
 
+/* --------------------------------------------------------------------------------------------------------------- */
+/* String API                                                                                                      */
+/* --------------------------------------------------------------------------------------------------------------- */
+
 typedef struct Str8 {
     const char *data;
     s32 count;
@@ -83,11 +92,20 @@ b8 str8_equals(Str8 lhs, Str8 rhs);
  */
 s32 str8_find_character(Str8 hay, char needle);
 
-void memory_barrier(void);
-void panic(Str8 reason);
+/**
+ * Parses an integer from the given string and returns the value.
+ * If `success` is not a null-pointer, the parsing success is stored into this pointer.
+ */
+s32 s32_from_str8(Str8 string, b8 *success);
 
-void set_memory(void *dst, u8 value, u32 size_in_bytes); // @Cleanup: Provide a clear_memory?
-void move_memory(void *dst, const void *src, u32 size_in_bytes); // @Cleanup: Rename this to copy_memory?
+/* --------------------------------------------------------------------------------------------------------------- */
+/* Memory Utilities                                                                                                */
+/* --------------------------------------------------------------------------------------------------------------- */
+
+void memory_barrier(void);
+void set_memory(void *dst, u8 value, u32 size_in_bytes);
+void clear_memory(void *dst, u32 size_in_bytes);
+void copy_memory(void *dst, const void *src, u32 size_in_bytes);
 s32 compare_memory(const void *lhs, const void *rhs, u32 size_in_bytes);
 s32 compare_cstrings(const char *lhs, const char *rhs);
 s32 cstring_length(const char *string);
@@ -102,3 +120,9 @@ void from_big_endian(void *dst, const void *src, u32 size_in_bytes);
 u64 u64_from_big_endian(u64 src);
 u32 u32_from_big_endian(u32 src);
 u16 u16_from_big_endian(u16 src);
+
+/* --------------------------------------------------------------------------------------------------------------- */
+/* Base                                                                                                            */
+/* --------------------------------------------------------------------------------------------------------------- */
+
+void panic(Str8 reason);

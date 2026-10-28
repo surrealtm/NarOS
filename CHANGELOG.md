@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v0.3.0 - unreleased
+
+- Added support for arguments for commands [!38](https://github.com/surrealtm/NarOS/pull/38)
+
 ## v0.2.0 - 27.10.2026
 
 - Added PCI and UHCI protocols for device discovery and control [!28](https://github.com/surrealtm/NarOS/pull/28)

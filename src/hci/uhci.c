@@ -483,7 +483,7 @@ s32 submit(UHCI_Controller *controller, const u8 device_idx, const u8 endpoint_i
 
 static
 s32 control(UHCI_Controller *controller, const u8 device_idx, const UHCI_Packet_Type payload_direction, const void *header_data, const u32 header_size_in_bytes, const void *payload, const u32 payload_size_in_bytes) {
-    assert(header_size_in_bytes == 8, "The header size for a control transaction was expected to be 8 bytes long.");
+    sanity_check(header_size_in_bytes == 8, "The header size for a control transaction was expected to be 8 bytes long.");
 
     const u8 endpoint_idx = 0;
 

@@ -48,7 +48,7 @@ Block_Device *block_device_allocate(const Block_Device_Interface interface, cons
     ZERO_STRUCT(device);
     device->key = key;
     device->interface = interface;
-    move_memory(device->device_name, device_name.data, min((s32) ARRAY_COUNT(device->device_name), device_name.count));
+    copy_memory(device->device_name, device_name.data, min((s32) ARRAY_COUNT(device->device_name), device_name.count));
     device->block_size_in_bytes = block_size_in_bytes;
     device->block_count = block_count;
     ++block_device_count;
