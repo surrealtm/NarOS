@@ -52,16 +52,6 @@ void advance_cursor_vertically(Terminal *terminal) {
 }
 
 static
-void advance_cursor_horizontally(Terminal *terminal) {
-    if(terminal->backbuffer_write_x < BACKBUFFER_WIDTH - 1) {
-        ++terminal->backbuffer_write_x;
-    } else {
-        advance_cursor_vertically(terminal);
-        terminal->backbuffer_write_x = 0;
-    }
-}
-
-static
 void write_character(Terminal *terminal, const char character, const OS_Display_Color foreground, const OS_Display_Color background) {
     if(character == '\r') {
         terminal->backbuffer_write_x = 0;
@@ -69,9 +59,15 @@ void write_character(Terminal *terminal, const char character, const OS_Display_
         advance_cursor_vertically(terminal);
         terminal->backbuffer_write_x = 0;
     } else {
+        if (terminal->backbuffer_write_x == BACKBUFFER_WIDTH) {
+            advance_cursor_vertically(terminal);
+            terminal->backbuffer_write_x = 0;
+        }
+
         const u32 idx = (terminal->backbuffer_write_y * BACKBUFFER_WIDTH) + terminal->backbuffer_write_x;
         terminal->backbuffer[idx] = (Cell) { character, foreground, background };
-        advance_cursor_horizontally(terminal);
+
+        ++terminal->backbuffer_write_x;
     }
 }
 

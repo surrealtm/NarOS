@@ -59,7 +59,7 @@ Token find_next_token(const Str8 command_line, s32 *cursor) {
 // Commands
 // ---------------------------------------------------------------------------------------------------------------
 
-typedef s32(*Command_Dispatch)(const Token *tokens, const s32 token_count);
+typedef s32(*Command_Dispatch)(const Token *tokens);
 
 typedef enum Command_Argument_Type {
     COMMAND_ARGUMENT_TYPE_Unused,
@@ -92,49 +92,41 @@ static s32 cmd_quit(void);
 static s32 cmd_version(void);
 static s32 cmd_help(void);
 static s32 cmd_block_devices(void);
-static s32 cmd_read(void);
-static s32 cmd_write(void);
+static s32 cmd_read(Str8, s32);
+static s32 cmd_write(Str8, Str8);
 
 static
-s32 dispatch_quit(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
+s32 dispatch_quit(const Token *tokens) {
+    (void) tokens;
     return cmd_quit();
 }
 
 static
-s32 dispatch_version(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
+s32 dispatch_version(const Token *tokens) {
+    (void) tokens;
     return cmd_version();
 }
 
 static
-s32 dispatch_help(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
+s32 dispatch_help(const Token *tokens) {
+    (void) tokens;
     return cmd_help();
 }
 
 static
-s32 dispatch_block_devices(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
+s32 dispatch_block_devices(const Token *tokens) {
+    (void) tokens;
     return cmd_block_devices();
 }
 
 static
-s32 dispatch_read(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
-    return cmd_read();
+s32 dispatch_read(const Token *tokens) {
+    return cmd_read(tokens[1].string, tokens[2].integer.value);
 }
 
 static
-s32 dispatch_write(const Token *token, const s32 token_count) {
-    (void) token;
-    (void) token_count;
-    return cmd_write();
+s32 dispatch_write(const Token *tokens) {
+    return cmd_write(tokens[1].string, tokens[2].string);
 }
 
 static Command commands[] = {
@@ -142,8 +134,8 @@ static Command commands[] = {
     { str8_lit(":version"), str8_lit("Prints the version of the kernel"), dispatch_version, { 0 } },
     { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), dispatch_help, { 0 } },
     { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), dispatch_block_devices, { 0 } },
-    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), dispatch_read, { { .name = str8_lit("Drive"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Bytes"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
-    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), dispatch_write, { 0 } },
+    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), dispatch_read, { { .name = str8_lit("Device"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Blocks"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
+    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), dispatch_write, { { .name = str8_lit("Device"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Content"), .type = COMMAND_ARGUMENT_TYPE_String } } },
 };
 
 
@@ -198,8 +190,13 @@ s32 cmd_block_devices(void) {
 }
 
 static
-s32 cmd_read(void) {
-    const Block_Device_Key key = { 'C' };
+s32 cmd_read(const Str8 device_identifier, const s32 number_of_blocks) {
+    if (device_identifier.count != 1) {
+        error_msg("Expected a single character as the device identifier.\n");
+        return -1;
+    }
+
+    const Block_Device_Key key = { device_identifier.data[0] };
     const Block_Device *device = block_device_find(key);
 
     if (!block_device_is_valid(device)) {
@@ -207,8 +204,9 @@ s32 cmd_read(void) {
         return -1;
     }
 
-    char buffer[device->block_size_in_bytes];
-    if (!block_device_read(device, device->block_count - 1, buffer)) {
+    const s32 bytes_to_read = device->block_size_in_bytes * number_of_blocks;
+    char buffer[bytes_to_read];
+    if (!block_device_read(device, device->block_count - number_of_blocks, buffer)) {
         error_msg("Failed to read from the block device.\n");
         return -1;
     }
@@ -232,8 +230,13 @@ s32 cmd_read(void) {
 }
 
 static
-s32 cmd_write(void) {
-    const Block_Device_Key key = { 'D' };
+s32 cmd_write(const Str8 device_identifier, const Str8 content) {
+    if (device_identifier.count != 1) {
+        error_msg("Expected a single character as the device identifier.\n");
+        return -1;
+    }
+
+    const Block_Device_Key key = { device_identifier.data[0] };
     const Block_Device *device = block_device_find(key);
 
     if (!block_device_is_valid(device)) {
@@ -241,14 +244,21 @@ s32 cmd_write(void) {
         return -1;
     }
 
+    const s32 number_of_blocks = align(content.count, device->block_size_in_bytes);
     char buffer[device->block_size_in_bytes];
-    set_memory(buffer, 0, device->block_size_in_bytes);
-    const char *text = "This text was created by the :write command inside NarOS.";
-    move_memory(buffer, text, cstring_length(text));
+    s32 block_idx = 0;
+    for (s32 offset_in_content = 0; offset_in_content < content.count; ) {
+        const s32 batch_size = min(content.count - offset_in_content, (s32) device->block_size_in_bytes);
+        move_memory(buffer, content.data + offset_in_content, batch_size);
+        set_memory(buffer + batch_size, 0, device->block_size_in_bytes - batch_size);
 
-    if (!block_device_write(device, device->block_count - 1, buffer)) {
-        error_msg("Failed to read from the block device.\n");
-        return -1;
+        if (!block_device_write(device, device->block_count - number_of_blocks + block_idx, buffer)) {
+            error_msg("Failed to read from the block device.\n");
+            return -1;
+        }
+
+        offset_in_content += batch_size;
+        block_idx += 1;
     }
 
     return 0;
@@ -357,5 +367,5 @@ b8 dispatch_command_line(const Str8 command_line) {
     //
     // Invoke the command dispatcher
     //
-    return command->dispatch(tokens, token_count) == 0;
+    return command->dispatch(tokens) == 0;
 }
