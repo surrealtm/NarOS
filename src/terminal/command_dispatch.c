@@ -4,6 +4,8 @@
 #include "output.h"
 #include "block_device/block_device.h"
 
+#define COMMAND_MAX_ARGUMENTS 4
+
 // ---------------------------------------------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------------------------------------------
@@ -18,10 +20,22 @@
 
 typedef s32(*Command_Callback)(void);
 
+typedef enum Command_Argument_Type {
+    COMMAND_ARGUMENT_TYPE_Unused,
+    COMMAND_ARGUMENT_TYPE_String,
+    COMMAND_ARGUMENT_TYPE_Integer,
+} Command_Argument_Type;
+
+typedef struct Command_Argument {
+    Str8 name;
+    Command_Argument_Type type;
+} Command_Argument;
+
 typedef struct Command {
     Str8 name;
     Str8 description;
     Command_Callback callback;
+    Command_Argument arguments[COMMAND_MAX_ARGUMENTS];
 } Command;
 
 static s32 cmd_quit(void);
@@ -31,13 +45,18 @@ static s32 cmd_block_devices(void);
 static s32 cmd_read(void);
 static s32 cmd_write(void);
 
+static Str8 command_argument_type_string[] = {
+    [COMMAND_ARGUMENT_TYPE_String] = str8_lit("string"),
+    [COMMAND_ARGUMENT_TYPE_Integer] = str8_lit("integer"),
+};
+
 static Command commands[] = {
-    { str8_lit(":quit"),    str8_lit("Exits the kernel"), cmd_quit },
-    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), cmd_version },
-    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), cmd_help },
-    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), cmd_block_devices },
-    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), cmd_read },
-    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), cmd_write },
+    { str8_lit(":quit"),    str8_lit("Exits the kernel"), cmd_quit, { 0 } },
+    { str8_lit(":version"), str8_lit("Prints the version of the kernel"), cmd_version, { 0 } },
+    { str8_lit(":help"),    str8_lit("Prints an overview of all available commands"), cmd_help, { 0 } },
+    { str8_lit(":block_devices"), str8_lit("Prints all connected block devices"), cmd_block_devices, { 0 } },
+    { str8_lit(":read"),    str8_lit("Reads the last block of the connected block device"), cmd_read, { { .name = str8_lit("Drive"), .type = COMMAND_ARGUMENT_TYPE_String }, { .name = str8_lit("Bytes"), .type = COMMAND_ARGUMENT_TYPE_Integer } } },
+    { str8_lit(":write"),   str8_lit("Writes a string into the last block of the connected block device"), cmd_write, { 0 } },
 };
 
 static
@@ -175,12 +194,35 @@ Token find_next_token(const Str8 command_line, s32 *cursor) {
     const b8 enquoted = command_line.data[*cursor] == '"';
     const s32 token_start = *cursor + enquoted;
     const char terminating_character = enquoted ? '"' : ' ';
-    const Str8 remaining_line = str8_substring(command_line, token_start + 1, command_line.count - 1);
+    const s32 start_of_remaining_line = min(token_start + 1, command_line.count - 1);
+    const Str8 remaining_line = str8_substring(command_line, start_of_remaining_line, command_line.count - 1);
     const s32 needle = str8_find_character(remaining_line, terminating_character);
-    const s32 token_end = token_start + min(needle, remaining_line.count); // Clamp to the length of the command line in case there's no space in the remaining line
+    const s32 token_end = start_of_remaining_line + min(needle - 1, remaining_line.count - 1); // Clamp to the length of the command line in case there's no space in the remaining line
     *cursor = token_end + 1 + enquoted;
-    const Str8 string = enquoted && token_end > token_start + 1 ? str8_substring(command_line, token_start, token_end) : str8_substring(command_line, token_start, token_end); // Remove the quotes from the string here.
+    const Str8 string = str8_substring(command_line, token_start, token_end);
     return token_from_string(string);
+}
+
+static
+const Command *find_command(const Str8 name) {
+    for (u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
+        if (str8_equals(commands[cmd_idx].name, name)) {
+            return &commands[cmd_idx];
+        }
+    }
+
+    return null;
+}
+
+static
+s32 get_number_of_arguments(const Command *command) {
+    s32 count = 0;
+
+    for (u32 argument_idx = 0; argument_idx < ARRAY_COUNT(command->arguments); ++argument_idx) {
+        if (command->arguments[argument_idx].type != COMMAND_ARGUMENT_TYPE_Unused) ++count;
+    }
+
+    return count;
 }
 
 b8 dispatch_command_line(const Str8 command_line) {
@@ -212,19 +254,54 @@ b8 dispatch_command_line(const Str8 command_line) {
         }
     }
 
-    // @Temporary
-    for (s32 i = 0; i < token_count; ++i) {
-        os_output_print(str8("Token: %d, %s, (%d, %d)\n"), i, tokens[i].string, tokens[i].integer.value, tokens[i].integer.valid);
+    //
+    // Find the invoked command
+    //
+    const Command *command = find_command(tokens[0].string);
+    if (!command) {
+        error_fmt("The command '%s' is not known. Try `:help`.\n", tokens[0].string);
+        return false;
+    }
+
+    //
+    // Validate the number of arguments
+    //
+    if (token_count - 1 != get_number_of_arguments(command)) {
+        error_fmt("The command '%s' expected %d arguments, but %d were passed.\n", command->name, get_number_of_arguments(command), token_count - 1);
+        return false;
+    }
+
+    //
+    // Type check the command arguments
+    //
+    {
+        s32 token_idx = 1;
+
+        for (u32 argument_idx = 0; argument_idx < ARRAY_COUNT(command->arguments); ++argument_idx) {
+            const Command_Argument argument = command->arguments[argument_idx];
+            if (argument.type == COMMAND_ARGUMENT_TYPE_Unused) continue;
+
+            assert(token_idx < token_count, "Mismatch in the token <-> argument handling.");
+            const Token token = tokens[token_idx++];
+
+            b8 valid = false;
+
+            switch (argument.type) {
+                case COMMAND_ARGUMENT_TYPE_Unused: break;
+                case COMMAND_ARGUMENT_TYPE_String: valid = true; break;
+                case COMMAND_ARGUMENT_TYPE_Integer: valid = token.integer.valid; break;
+            }
+
+            if (!valid) {
+                error_fmt("The command '%s' expected a '%s' for argument %d, but it received '%s'.\n", command->name, command_argument_type_string[argument.type], token_idx, token.string);
+                return false;
+            }
+        }
     }
 
     //
     // Invoke the command handler
     //
-    for(u32 cmd_idx = 0; cmd_idx < ARRAY_COUNT(commands); ++cmd_idx) {
-        if(str8_equals(commands[cmd_idx].name, tokens[0].string)) {
-            return commands[cmd_idx].callback() == 0;
-        }
-    }
 
-    return false;
+    return true;
 }
