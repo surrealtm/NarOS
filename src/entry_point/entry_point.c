@@ -3,6 +3,7 @@
 #include "ctrl.h"
 #include "input.h"
 #include "output.h"
+#include "alloc.h"
 
 #include "acpi/acpi.h"
 #include "ctrl/ctrl_kernel.h"
@@ -29,6 +30,9 @@ int kernel_entry_point(const Boot_Info boot_info) {
     pci_initialize();
 
     os_input_set_keyboard_layout(OS_INPUT_KEYBOARD_LAYOUT_German);
+
+    Stack_Allocator allocator;
+    stack_allocator_create(&allocator, MEMORY_UNIT_Megabyte);
 
     terminal_run();
     os_ctrl_shut_down();
