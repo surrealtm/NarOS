@@ -6,6 +6,7 @@
 #include "alloc.h"
 
 #include "acpi/acpi.h"
+#include "alloc/alloc_kernel.h"
 #include "ctrl/ctrl_kernel.h"
 #include "display/display_kernel.h"
 #include "input/input_kernel.h"
@@ -16,6 +17,8 @@
 typedef struct Boot_Info {
     u32 boot_drive_number;
     u32 vga_display_mode;
+    void *dynamic_memory_region_low;
+    void *dynamic_memory_region_high;
 } Boot_Info;
 
 /**
@@ -28,8 +31,10 @@ int kernel_entry_point(const Boot_Info boot_info) {
     interrupt_initialize();
     acpi_initialize();
     pci_initialize();
+    alloc_initialize_memory_region(boot_info.dynamic_memory_region_low, boot_info.dynamic_memory_region_high);
 
     os_input_set_keyboard_layout(OS_INPUT_KEYBOARD_LAYOUT_German);
+    os_output_print(str8("The available dynamic memory is %d bytes.\n"), (u64) ((u8 *) boot_info.dynamic_memory_region_high - (u8 *) boot_info.dynamic_memory_region_low));
 
     Stack_Allocator allocator;
     stack_allocator_create(&allocator, MEMORY_UNIT_Megabyte);

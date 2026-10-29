@@ -14,20 +14,23 @@ kernel_main:
     mov edi, __bss_start
     mov ecx, __bss_end
     sub ecx, edi
-
     xor eax, eax
     rep stosb
 
-    ; Jump into the C entry point. For this, we need to forward the `Boot_Info` struct along, which
-    ; is passed on the stack. Since every `call` instruction modifies the stack though, we need to
-    ; copy the `Boot_Info` struct from our callee frame into the caller frame...
-    mov ecx, [esp + 0x4]
-    mov edi, [esp + 0x8]
-    sub esp, 0x8
-    mov [esp + 0x0], ecx
-    mov [esp + 0x4], edi
+    ; Copy the `Boot_Info` struct from this call frame into the call frame of the kernel entry point.
+    sub esp, BOOT_INFO_STRUCT_SIZE
+
+    mov edi, esp
+    mov esi, esp
+    add esi, BOOT_INFO_STRUCT_SIZE + 0x4
+    mov ecx, BOOT_INFO_STRUCT_SIZE
+    cld
+    rep movsb
+
     call kernel_entry_point
-    add esp, 0x8
+    add esp, BOOT_INFO_STRUCT_SIZE
     ret
+
+BOOT_INFO_STRUCT_SIZE equ 0x10
 
 section .note.GNU-stack noalloc noexec nowrite progbits

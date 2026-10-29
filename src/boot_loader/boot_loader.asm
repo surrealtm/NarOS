@@ -144,6 +144,8 @@ invoke_kernel:
     mov al, [BOOT_DRIVE]
     mov [esp + 0x0], al
     mov dword [esp + 0x4], dword VGA_DISPLAY_MODE
+    mov dword [esp + 0x8], dword DYNAMIC_MEMORY_REGION_LOW
+    mov dword [esp + 0xc], dword DYNAMIC_MEMORY_REGION_HIGH
     call KERNEL_OFFSET
     call halt ; We don't expect the kernel to ever return, but just to be sure...
 [bits 16]
@@ -188,6 +190,8 @@ DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
 DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
 KERNEL_EXIT_MSG    db "The kernel has exited.", 0xd, 0xa, 0x0
 VGA_DISPLAY_MODE   equ 0x2 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
+DYNAMIC_MEMORY_REGION_LOW  equ 0x0
+DYNAMIC_MEMORY_REGION_HIGH equ 0x0
 BOOT_DRIVE db 0
 times 510 - ($ - $$) db 0 ; Align the entire boot loader binary to 510 bytes
 dw 0xaa55 ; Magic number at the end identifying this as a boot loader program and aligning the entire binary to 512 bytes
