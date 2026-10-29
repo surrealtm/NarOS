@@ -62,10 +62,7 @@ entry_point:
     mov [BOOT_DRIVE], dl
 
     call initialize_vga
-
-    mov si, INITIALIZATION_MSG
-    call print_string
-
+    call determine_dynamic_memory_region
     call load_kernel_from_disk
     call invoke_kernel ; This function will never return, as we've entered 32 bit mode...
 
@@ -75,20 +72,54 @@ initialize_vga:
     int 0x10
     ret
 
-print_string:
-    mov ah, 0x0e
-    mov bx, 0x0007
-.next_character:
-    mov al, [si]
-    test al, al
-    jz .end_of_string
-    int 0x10
-    inc si
-    jmp .next_character
-.end_of_string:
-    xor ax, ax
-    mov dx, ax
-    mov es, ax
+determine_dynamic_memory_region:
+    ; Allocate stack space for the local memory map entry, which is a structure of 24 bytes
+    sub esp, 24
+
+.next_memory_map_entry:
+    ; Prepare the interrupt
+    mov eax, 0xe820
+    mov edx, 0x534D4150
+    mov ecx, 24
+    mov di, [esp + 0]
+    mov dword [es:di + 20], 1
+    int 0x15
+
+    ;
+    ; Check whether the interrupt returned a valid entry
+    ;
+
+    jc .error ; Read failed, exit
+    cmp eax, 0x534D4150 ; Didn't get a valid result
+    jne .exit
+    cmp ecx, 20 ; Didn't get a valid result
+    jb .exit
+    cmp dword [es:di + 16], 1 ; Region is not free memory, skip
+    jne .continue
+    cmp dword [es:di + 0], STACK_POINTER ; Region starts in our stack space, not viable for dynamic memory
+    jb .continue
+
+    ; Found a valid memory map entry. This region will be used for dynamic memory allocation.
+    ; There might be more and/or bigger memory regions later on, but for now we'll just choose
+    ; the first entry.
+    mov eax, [es:di + 0] ; Read base address
+    mov [DYNAMIC_MEMORY_REGION_LOW],  eax
+    add eax, [es:di + 8] ; Add length
+    mov [DYNAMIC_MEMORY_REGION_HIGH], eax
+    jmp .exit
+
+.continue:
+    test ebx, ebx
+    jnz .next_memory_map_entry
+    jmp .exit
+
+.error:
+    mov dword [DYNAMIC_MEMORY_REGION_LOW],  0x0
+    mov dword [DYNAMIC_MEMORY_REGION_HIGH], 0x0
+    jmp .exit
+
+.exit:
+    add esp, 24
     ret
 
 halt:
@@ -111,13 +142,9 @@ load_kernel_from_disk:
     xor ax, ax
     mov ds, ax
     mov es, ax
-    mov si, DISK_SUCCESS_MSG
-    call print_string
     popa
     ret
 .error:
-    mov si, DISK_FAILURE_MSG
-    call print_string
     call halt
 
 invoke_kernel:
@@ -138,14 +165,17 @@ invoke_kernel:
     mov fs, ax
     mov gs, ax
 .call_kernel_entry_point:
-    mov ebp, 0x90000 ; Set up the stack pointer below the VGA/firmware aperture
+    mov ebp, STACK_POINTER
     mov esp, ebp
     ; Set up the Boot_Loader_Info struct on the stack. Careful: The `kernel_main` function needs to copy this struct!
+    sub esp, 0x10
     mov al, [BOOT_DRIVE]
     mov [esp + 0x0], al
     mov dword [esp + 0x4], dword VGA_DISPLAY_MODE
-    mov dword [esp + 0x8], dword DYNAMIC_MEMORY_REGION_LOW
-    mov dword [esp + 0xc], dword DYNAMIC_MEMORY_REGION_HIGH
+    mov eax, dword [DYNAMIC_MEMORY_REGION_LOW]
+    mov dword [esp + 0x8], eax
+    mov eax, dword [DYNAMIC_MEMORY_REGION_HIGH]
+    mov dword [esp + 0xc], eax
     call KERNEL_OFFSET
     call halt ; We don't expect the kernel to ever return, but just to be sure...
 [bits 16]
@@ -184,14 +214,11 @@ DATA_SEGMENT equ gdt_data - gdt_start
 ; ----------------------------------------------------------------------------------------------------------------
 ; Data Declarations
 ; ----------------------------------------------------------------------------------------------------------------
-KERNEL_OFFSET equ 0x8000 ; The linker script declares the start of the .text section at this offset
-INITIALIZATION_MSG db "Initializing NarOS...", 0xd, 0xa, 0x0
-DISK_SUCCESS_MSG   db "Successfully read the kernel from disk...", 0xd, 0xa, 0x0
-DISK_FAILURE_MSG   db "Failed to read the kernel from disk...", 0xd, 0xa, 0x0
-KERNEL_EXIT_MSG    db "The kernel has exited.", 0xd, 0xa, 0x0
-VGA_DISPLAY_MODE   equ 0x2 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
-DYNAMIC_MEMORY_REGION_LOW  equ 0x0
-DYNAMIC_MEMORY_REGION_HIGH equ 0x0
+STACK_POINTER    equ 0x90000 ; Set up the stack pointer below the VGA/firmware aperture
+KERNEL_OFFSET    equ 0x8000 ; The linker script declares the start of the .text section at this offset
+VGA_DISPLAY_MODE equ 0x2 ; According to https://www.ctyme.com/intr/rb-0069.htm#Table10
+DYNAMIC_MEMORY_REGION_LOW  dd 0x0
+DYNAMIC_MEMORY_REGION_HIGH dd 0x0
 BOOT_DRIVE db 0
 times 510 - ($ - $$) db 0 ; Align the entire boot loader binary to 510 bytes
 dw 0xaa55 ; Magic number at the end identifying this as a boot loader program and aligning the entire binary to 512 bytes

@@ -259,7 +259,8 @@ fi
 # ----------------------------------------------------------------------------------------------------------------
 # Launch QEMU
 # ----------------------------------------------------------------------------------------------------------------
-QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PARAMETERS} -monitor stdio"
+QEMU_MEMORY_CAPACITY="16m"
+QEMU_PARAMETERS="-m ${QEMU_MEMORY_CAPACITY} -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PARAMETERS} -monitor stdio"
 
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
