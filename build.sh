@@ -9,7 +9,7 @@ BUILD_START=$(date +%s%N)
 # ----------------------------------------------------------------------------------------------------------------
 INCLUDE_DIR=include/
 SOURCE_DIR=src/
-BUILD_DIR=build/
+BUILD_DIR=build/kernel/
 IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
@@ -109,7 +109,8 @@ mkdir -p ${BUILD_DIR}
 # ----------------------------------------------------------------------------------------------------------------
 object_file_path() {
     local source="$1"
-    local name="${source//\//_}"
+    local name="${source}"
+    name="${name//\//_}"
     name="${name}.o"
     printf '%s%s\n' "${BUILD_DIR}" "${name}"
 }

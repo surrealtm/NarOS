@@ -1,6 +1,7 @@
 #include "test.h"
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
 
 #define OUTPUT_WIDTH 80
 
@@ -12,10 +13,12 @@ Test_Definition *first_test_definition = 0;
 
 static unsigned current_failure_indicator;
 static char current_failure_reason[1024];
+static jmp_buf failure_jump_buffer;
 
 void fail_current_test(const char *file, unsigned int line, const char *reason) {
     snprintf(current_failure_reason, sizeof(current_failure_reason), "%s:%d: %s", file, line, reason);
     current_failure_indicator = 1;
+    longjmp(failure_jump_buffer, 1);
 }
 
 void register_test_definition(Test_Definition *definition) {
@@ -42,7 +45,10 @@ int main(void) {
         const int name_width = printf("  - %s.%s:", current_test_definition->suite, current_test_definition->name);
 
         current_failure_indicator = 0;
-        current_test_definition->function(); // @Incomplete: How to detect whether this test actually passed?
+
+        if (setjmp(failure_jump_buffer) == 0) {
+            current_test_definition->function(); // @Incomplete: How to detect whether this test actually passed?
+        }
 
         if (current_failure_indicator) {
             pad('.', OUTPUT_WIDTH - name_width - strlen("FAIL"));

@@ -15,7 +15,7 @@ static u8 *dynamic_memory_region_pointer = null;
 
 static
 void *reserve(const u64 capacity) {
-    if (dynamic_memory_region_pointer + capacity <= dynamic_memory_region_high) {
+    if (dynamic_memory_region_pointer + capacity - 1 <= dynamic_memory_region_high) {
         void *result = dynamic_memory_region_pointer;
         dynamic_memory_region_pointer += capacity;
         return result;
