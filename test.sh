@@ -5,6 +5,13 @@ set -e
 TEST_START=$(date +%s%N)
 
 # ----------------------------------------------------------------------------------------------------------------
+# Color Codes
+# ----------------------------------------------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+RESET='\033[0m'
+
+# ----------------------------------------------------------------------------------------------------------------
 # Common Variables
 # ----------------------------------------------------------------------------------------------------------------
 KERNEL_INCLUDE_DIR=include/
@@ -28,6 +35,15 @@ executable_file_path() {
     printf '%s%s\n' "${BUILD_DIR}" "${name}"
 }
 
+invoke_test() {
+    local executable="$1"
+    if ${executable}; then
+        echo "0"
+    else
+        echo "$?"
+    fi
+}
+
 # ----------------------------------------------------------------------------------------------------------------
 # Compile and execute the tests
 # ----------------------------------------------------------------------------------------------------------------
@@ -49,9 +65,27 @@ TEST_SOURCE_FILES=(
     "hello_world/hello_world.c"
 )
 
+echo "Running the test suite..."
+
 for FILEPATH in "${TEST_SOURCE_FILES[@]}"; do
-    echo " + Testing ${FILEPATH}..."
+    printf " + Running ${FILEPATH}..."
+
     EXECUTABLE_FILE=$(executable_file_path ${FILEPATH})
     ${COMPILER} "${TEST_COMPILER_OPTIONS[@]}" ${TEST_SOURCE_DIR}${FILEPATH} -o ${EXECUTABLE_FILE}
-    ${EXECUTABLE_FILE}
+    FAILED_TESTS=$(invoke_test ${EXECUTABLE_FILE})
+
+    if [ "${FAILED_TESTS}" -eq 0 ]; then
+        printf " ${GREEN}passed${RESET}"
+    else
+        printf " ${RED}${FAILED_TESTS} failure(s)${RESET}"
+    fi
+
+    printf "\n"
 done
+
+# ----------------------------------------------------------------------------------------------------------------
+# Report Metrics
+# ----------------------------------------------------------------------------------------------------------------
+TEST_END=$(date +%s%N)
+TEST_DURATION=$((BUILD_END - BUILD_START))
+echo "Test run took $((TEST_DURATION / 1000000)) ms."
