@@ -74,9 +74,7 @@ s32 calculate_number_of_digits_unsigned(u64 value, const u64 radix) {
 }
 
 static
-void print_unsigned_int(Print_Buffer *buffer, unsigned int value) {
-    const u64 radix = 10;
-
+void print_unsigned_int(Print_Buffer *buffer, unsigned int value, const unsigned int radix) {
     const s32 number_of_digits = calculate_number_of_digits_unsigned(value, radix);
 
     reserve(buffer, number_of_digits);
@@ -93,7 +91,7 @@ void print_unsigned_int(Print_Buffer *buffer, unsigned int value) {
 }
 
 static
-void print_signed_int(Print_Buffer *buffer, const signed int signed_value) {
+void print_signed_int(Print_Buffer *buffer, const signed int signed_value, const unsigned int radix) {
     unsigned int unsigned_value = (unsigned int) signed_value;
 
     if (signed_value < 0) {
@@ -101,7 +99,7 @@ void print_signed_int(Print_Buffer *buffer, const signed int signed_value) {
         unsigned_value = -signed_value;
     }
 
-    print_unsigned_int(buffer, unsigned_value);
+    print_unsigned_int(buffer, unsigned_value, radix);
 }
 
 static
@@ -121,12 +119,18 @@ void print_data_type(Print_Buffer *buffer, const char data_type, va_list *argume
 
         case 'u': {
             const unsigned int value = va_arg(*arguments, unsigned int);
-            print_unsigned_int(buffer, value);
+            print_unsigned_int(buffer, value, 10);
         } break;
 
         case 'd': {
             const signed int value = va_arg(*arguments, signed int);
-            print_signed_int(buffer, value);
+            print_signed_int(buffer, value, 10);
+        } break;
+
+        case 'p': {
+            const void *value = va_arg(*arguments, void *);
+            print_string(buffer, str8("0x"));
+            print_unsigned_int(buffer, (unsigned int) value, 16);
         } break;
 
         case 's': {

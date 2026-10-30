@@ -5,6 +5,7 @@
 
 #define PACKED_STRUCT __attribute__((packed))
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
+#define STRUCT_ALIGNMENT(type) __alignof(type)
 
 #define LITTLE_ENDIAN 1
 #define BIG_ENDIAN (!LITTLE_ENDIAN)
@@ -23,6 +24,7 @@
 
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
+#define clamp(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
 #define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
 

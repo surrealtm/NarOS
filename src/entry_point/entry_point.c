@@ -39,6 +39,9 @@ int kernel_entry_point(const Boot_Info boot_info) {
     Stack_Allocator allocator;
     stack_allocator_create(&allocator, MEMORY_UNIT_Megabyte);
 
+    Boot_Info *allocated = PushStruct(&allocator, Boot_Info);
+    os_output_print(str8("Allocated: %p\n"), allocated);
+
     terminal_run();
     os_ctrl_shut_down();
     return 0;
