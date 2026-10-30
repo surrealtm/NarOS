@@ -1,0 +1,32 @@
+name: Create a release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # Required to attach artifacts to a release
+
+create_release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes binutils clang nasm
+
+      - name: Build kernel
+        run: ./build.sh --clang
+
+      - name: Create release
+        run: |
+          gh release create "${GITHUB_REF_NAME}" build/naros.bin --title "Release ${GITHUB_REF_NAME}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+

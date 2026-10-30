@@ -3,6 +3,7 @@
 ## v0.3.0 - unreleased
 
 - Added support for arguments for commands [!38](https://github.com/surrealtm/NarOS/pull/38)
+- Added a simple testing framework to be used by specific kernel modules [!41](https://github.com/surrealtm/NarOS/pull/41)
 
 ## v0.2.0 - 27.10.2026
 
