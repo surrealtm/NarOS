@@ -36,10 +36,10 @@ int kernel_entry_point(const Boot_Info boot_info) {
     os_input_set_keyboard_layout(OS_INPUT_KEYBOARD_LAYOUT_German);
     os_output_print(str8("The available dynamic memory is %d bytes.\n"), (u64) ((u8 *) boot_info.dynamic_memory_region_high - (u8 *) boot_info.dynamic_memory_region_low));
 
-    Stack_Allocator allocator;
-    stack_allocator_create(&allocator, MEMORY_UNIT_Megabyte);
+    Heap_Allocator allocator;
+    heap_allocator_create(&allocator, MEMORY_UNIT_Megabyte);
 
-    Boot_Info *allocated = PushStruct(&allocator, Boot_Info);
+    Boot_Info *allocated = heap_allocator_allocate(&allocator, sizeof(Boot_Info), STRUCT_ALIGNMENT(Boot_Info));
     os_output_print(str8("Allocated: %p\n"), allocated);
 
     terminal_run();

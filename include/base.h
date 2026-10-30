@@ -1,5 +1,7 @@
 #pragma once
 
+// @Cleanup: Get consistent of the capitalization of macros
+
 #define STATIC_ASSERT(expr) extern int (*__Static_assert_function (void)) [!!sizeof (struct { int static_assertion_failed: (expr) ? 2 : -1; })]
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
