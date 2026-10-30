@@ -24,6 +24,8 @@ mkdir -p ${BUILD_DIR}
 # ----------------------------------------------------------------------------------------------------------------
 # Compilation Helpers
 # ----------------------------------------------------------------------------------------------------------------
+EXIT_CODE=0
+
 executable_file_path() {
     local source="$1"
     local name="${source//\//_}"
@@ -33,7 +35,7 @@ executable_file_path() {
 
 invoke_test() {
     local executable="$1"
-    ${executable} || true # This little helper prevents the bash script from exiting when a single test fails
+    ${executable} || EXIT_CODE=1 # This little helper prevents the bash script from exiting when a single test fails
 }
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -74,3 +76,5 @@ done
 TEST_END=$(date +%s%N)
 TEST_DURATION=$((BUILD_END - BUILD_START))
 echo "Test run took $((TEST_DURATION / 1000000)) ms."
+
+exit ${EXIT_CODE}

@@ -3,9 +3,9 @@ name: Build kernel
 on:
   push:
     branches:
-    - '**'
+      - '**'
     tags:
-    - 'v*'
+      - 'v*'
 
 permissions:
   contents: write # Required to attach artifacts to a release
