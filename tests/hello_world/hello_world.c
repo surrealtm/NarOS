@@ -1,5 +1,8 @@
+#include "test.h"
 #include <stdio.h>
 
-int main(void) {
-    return 1;
+TEST(HelloWorld, Sum) {
+    const int x = 1 + 1;
+    printf("X: %d\n", x);
 }
+
