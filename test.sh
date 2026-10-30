@@ -31,6 +31,11 @@ executable_file_path() {
     printf '%s%s\n' "${BUILD_DIR}" "${name}"
 }
 
+invoke_test() {
+    local executable="$1"
+    ${executable} || true # This little helper prevents the bash script from exiting when a single test fails
+}
+
 # ----------------------------------------------------------------------------------------------------------------
 # Compile and execute the tests
 # ----------------------------------------------------------------------------------------------------------------
@@ -60,7 +65,7 @@ echo "Running the test suite..."
 for FILEPATH in "${TEST_SOURCE_FILES[@]}"; do
     EXECUTABLE_FILE=$(executable_file_path ${FILEPATH})
     ${COMPILER} "${TEST_COMPILER_OPTIONS[@]}" ${TEST_SOURCE_DIR}${FILEPATH} ${TEST_SOURCE_DIR}${TEST_HANDLER_FILE} -o ${EXECUTABLE_FILE}
-    ${EXECUTABLE_FILE} || true
+    invoke_test ${EXECUTABLE_FILE}
 done
 
 # ----------------------------------------------------------------------------------------------------------------

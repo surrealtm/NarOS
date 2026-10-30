@@ -18,6 +18,17 @@
     } \
     static void test_##suite##_##name(void)
 
+#define ASSERT_EQ(lhs, rhs) \
+        if ((lhs) != (rhs)) { \
+            fail_current_test(__FILE__, __LINE__, #lhs " is not equal to " #rhs); \
+            return; \
+        }
+
+#define ASSERT_NE(lhs, rhs) \
+        if ((lhs) == (rhs)) { \
+            fail_current_test(__FILE__, __LINE__, #lhs " is equal to " #rhs); \
+            return; \
+        }
 
 /* --------------------------------------------------------------------------------------------------------------- */
 /* Test Internals                                                                                                  */
@@ -34,6 +45,7 @@ typedef struct Test_Definition {
 
 extern Test_Definition *first_test_definition;
 
+void fail_current_test(const char *file, unsigned int line, const char *reason);
 void register_test_definition(Test_Definition *definition);
 
 

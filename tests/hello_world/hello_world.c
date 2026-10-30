@@ -2,7 +2,6 @@
 #include <stdio.h>
 
 TEST(HelloWorld, Sum) {
-    const int x = 1 + 1;
-    printf("X: %d\n", x);
+    ASSERT_NE(1, 2);
 }
 
