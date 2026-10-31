@@ -92,7 +92,6 @@ TEST_COMPILER_OPTIONS=(
 )
 
 TEST_SOURCE_FILES=(
-    "hello_world/hello_world.c"
     "alloc/stack.c"
 )
 

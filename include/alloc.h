@@ -18,6 +18,7 @@ typedef struct Stack_Allocator {
 } Stack_Allocator;
 
 b8 stack_allocator_create(Stack_Allocator *allocator, u64 capacity);
+void stack_allocator_destroy(Stack_Allocator *allocator);
 void *stack_allocator_push(Stack_Allocator *allocator, u64 size_in_bytes, u64 alignment);
 u64 stack_allocator_mark(const Stack_Allocator *allocator);
 void stack_allocator_reset(Stack_Allocator *allocator, u64 mark);

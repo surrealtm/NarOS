@@ -23,3 +23,22 @@ TEST(Stack_Allocator, Push) {
     ASSERT_NE(a, b);
     ASSERT_TRUE(((int) b % 8) == 0);
 }
+
+TEST(Stack_Allocator, Release) {
+    Stack_Allocator allocator = create(16);
+    int *a = stack_allocator_push(&allocator, sizeof(int), 4);
+    int *b = stack_allocator_push(&allocator, sizeof(int), 4);
+    stack_allocator_reset(&allocator, 4);
+    int *c = stack_allocator_push(&allocator, sizeof(int), 4);
+    ASSERT_NE(a, b);
+    ASSERT_EQ(b, c);
+    ASSERT_EQ(allocator.occupied, 8);
+}
+
+TEST(Stack_Allocator, Destroy) {
+    Stack_Allocator allocator = create(16);
+    stack_allocator_destroy(&allocator);
+    ASSERT_EQ(allocator.base, 0);
+    ASSERT_EQ(allocator.occupied, 0);
+    ASSERT_EQ(allocator.capacity, 0);
+}

@@ -26,6 +26,12 @@ void *reserve(const u64 capacity) {
     }
 }
 
+static
+void release(const void *address) {
+    // @Incomplete: Support releasing memory regions
+    (void) address;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Kernel API
 // ---------------------------------------------------------------------------------------------------------------
@@ -57,6 +63,11 @@ b8 stack_allocator_create(Stack_Allocator *allocator, const u64 capacity) {
     allocator->capacity = (allocator->base != null) ? capacity : 0;
     allocator->occupied = 0;
     return allocator->base != null;
+}
+
+void stack_allocator_destroy(Stack_Allocator *allocator) {
+    release(allocator->base);
+    *allocator = (Stack_Allocator) { 0 };
 }
 
 void *stack_allocator_push(Stack_Allocator *allocator, const u64 size_in_bytes, const u64 alignment) {
