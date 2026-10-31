@@ -28,7 +28,8 @@
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
 #define clamp(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
-#define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
+#define next_multiple(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
+#define align(value, alignment) (next_multiple(value, alignment) * alignment)
 
 #define assert(condition, reason) if (!(condition)) panic(str8(reason))
 

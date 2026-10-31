@@ -1,6 +1,8 @@
 #include "alloc.h"
 #include "alloc_kernel.h"
 
+#define MEMORY_REGION_ALIGNMENT 16
+
 /**
  * The boot loader gives us a memory region that is available on the system and designated for
  * dynamic memory allocation.
@@ -15,10 +17,10 @@ static u8 *dynamic_memory_region_pointer = null;
 
 static
 void *reserve(const u64 capacity) {
-    if (dynamic_memory_region_pointer + capacity - 1 <= dynamic_memory_region_high) {
-        void *result = dynamic_memory_region_pointer;
-        dynamic_memory_region_pointer += capacity;
-        return result;
+    const u32 starting_address = align((unsigned int) dynamic_memory_region_pointer, MEMORY_REGION_ALIGNMENT);
+    if (starting_address + capacity - 1 <= (u32) dynamic_memory_region_high) {
+        dynamic_memory_region_pointer = (u8 *) (starting_address + 1);
+        return (void *) starting_address;
     } else {
         return null;
     }
