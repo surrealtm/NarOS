@@ -33,6 +33,8 @@
 
 #define assert(condition, reason) if (!(condition)) panic(str8(reason))
 
+#define highest_bit_set(value) (31 - __builtin_clz(value))
+
 #if ENABLE_SANITY_CHECKS
 # define sanity_check(condition, reason) if (!(condition)) panic(str8(reason))
 #else

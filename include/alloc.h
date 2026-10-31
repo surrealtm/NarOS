@@ -28,8 +28,13 @@ void stack_allocator_reset(Stack_Allocator *allocator, u64 mark);
 
 // ---------------------------------------------- Heap Allocator ----------------------------------------------
 
+#define HEAP_ALLOCATOR_BINS 16
+
+struct Heap_Segment;
+
 typedef struct Heap_Allocator {
     Stack_Allocator stack;
+    struct Heap_Segment *bins[HEAP_ALLOCATOR_BINS];
 } Heap_Allocator;
 
 b8 heap_allocator_create(Heap_Allocator *allocator, u64 capacity);

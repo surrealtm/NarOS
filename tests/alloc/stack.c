@@ -1,8 +1,8 @@
 #include "test.h"
 #include "alloc.h"
 #include "alloc/alloc_kernel.h"
+
 #include <stdlib.h>
-#include <stdio.h>
 
 static
 Stack_Allocator create(const u64 capacity) {
@@ -19,7 +19,7 @@ TEST(Stack_Allocator, Push) {
     ASSERT_NE(a, null);
     *a = 5;
     const int *b = stack_allocator_push(&allocator, sizeof(int), 8);
-    ASSERT_NE(a, null);
+    ASSERT_NE(b, null);
     ASSERT_NE(a, b);
     ASSERT_TRUE(((int) b % 8) == 0);
 }

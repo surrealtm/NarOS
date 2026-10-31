@@ -93,6 +93,7 @@ TEST_COMPILER_OPTIONS=(
 
 TEST_SOURCE_FILES=(
     "alloc/stack.c"
+    "alloc/heap.c"
 )
 
 TEST_HANDLER_FILE="test.c"
