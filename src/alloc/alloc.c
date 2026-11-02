@@ -125,6 +125,11 @@ b8 segments_are_continuous(const Heap_Segment *lhs, const Heap_Segment *rhs) {
 }
 
 static inline
+const u8 *one_plus_end_of_segment(const Heap_Segment *segment) {
+    return ((u8 *) segment) + sizeof(Heap_Segment) + segment->segment_size_in_bytes;
+}
+
+static inline
 void update_segment_metadata(Heap_Segment *segment, const u64 allocated_size_in_bytes, const u64 user_size_in_bytes, const b8 used) {
     assert(allocated_size_in_bytes < 0xffffffff, "The allocated heap segment is too large for the metadata.");
     assert(user_size_in_bytes < 0x7fffffff, "The allocated heap segment is too large for the metadata.");
@@ -224,8 +229,6 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
                 // remains unchanged, but the latter half of the segment can be used for this user payload.
                 const u64 retained_size_in_bytes = free_segment->segment_size_in_bytes - segment_size_in_bytes;
                 Heap_Segment *split = split_segment_at(free_segment, retained_size_in_bytes);
-                split->previous_free = null;
-                split->next_free     = null;
                 update_segment_metadata(free_segment, retained_size_in_bytes, 0, false);
                 update_segment_metadata(split, segment_size_in_bytes, user_size_in_bytes, true);
                 void *user_pointer = user_pointer_from_segment(split);
@@ -250,14 +253,44 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
 }
 
 void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_pointer, const u64 new_user_size_in_bytes, const u64 new_user_alignment) {
-    // @Incomplete: Heap reallocation
-    (void) allocator;
-    (void) old_pointer;
-    (void) new_user_size_in_bytes;
-    (void) new_user_alignment;
-    (void) insert_segment_into_free_list;
-    (void) maybe_coalesce_free_segment;
-    return null;
+    if (new_user_size_in_bytes == 0) {
+        heap_allocator_deallocate(allocator, old_pointer);
+        return null;
+    }
+
+    const u64 new_segment_size_in_bytes = align(new_user_size_in_bytes, STRUCT_ALIGNMENT(Heap_Segment));
+    Heap_Segment *old_segment = segment_from_user_pointer(old_pointer);
+
+    if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes && old_segment->segment_size_in_bytes <= new_segment_size_in_bytes + sizeof(Heap_Segment)) {
+        // The size didn't change significantly, so don't change anything about the underlying
+        // block structure.
+        update_segment_metadata(old_segment, old_segment->segment_size_in_bytes, new_user_size_in_bytes, true);
+        return user_pointer_from_segment(old_segment);
+    } else if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes) {
+        // The new size is smaller than the previous one, so split the existing block up.
+        // This avoids having to copy the existing data.
+        const u64 split_size_in_bytes = old_segment->segment_size_in_bytes - new_segment_size_in_bytes - sizeof(Heap_Segment);
+        Heap_Segment *split = split_segment_at(old_segment, new_segment_size_in_bytes);
+        update_segment_metadata(old_segment, new_segment_size_in_bytes, new_user_size_in_bytes, true);
+        update_segment_metadata(split, split_size_in_bytes, 0, false);
+        insert_segment_into_free_list(allocator, split);
+        return user_pointer_from_segment(old_segment);
+    } else if (one_plus_end_of_segment(old_segment) == (const u8 *) allocator->stack.base + allocator->stack.occupied) {
+        // The new size is larger than the previous, but this block is the very last thing in the
+        // arena. In that case, we can just push the arena to get more space without having to
+        // copy the existing data.
+        const u64 extension_size_in_bytes = new_segment_size_in_bytes - old_segment->segment_size_in_bytes;
+        stack_allocator_push(&allocator->stack, extension_size_in_bytes, 1);
+        update_segment_metadata(old_segment, old_segment->segment_size_in_bytes + extension_size_in_bytes, new_user_size_in_bytes, true);
+        return user_pointer_from_segment(old_segment);
+    } else {
+        // The new size is larger than the previous, and we cannot abuse the layout of the heap allocator
+        // in the arena, so we just have to allocate a new block, and then free the old one...
+        void *new_pointer = heap_allocator_allocate(allocator, new_user_size_in_bytes, new_user_alignment);
+        if (new_pointer != null) copy_memory(new_pointer, old_pointer, old_segment->user_size_in_bytes);
+        heap_allocator_deallocate(allocator, old_pointer);
+        return new_pointer;
+    }
 }
 
 void heap_allocator_deallocate(Heap_Allocator *allocator, const void *pointer) {
