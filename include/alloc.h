@@ -34,6 +34,7 @@ struct Heap_Segment;
 
 typedef struct Heap_Allocator {
     Stack_Allocator stack;
+    struct Heap_Segment *last_segment; // Physical tail of the arena
     struct Heap_Segment *bins[HEAP_ALLOCATOR_BINS];
 } Heap_Allocator;
 
