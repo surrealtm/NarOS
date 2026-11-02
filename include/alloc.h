@@ -39,5 +39,5 @@ typedef struct Heap_Allocator {
 
 b8 heap_allocator_create(Heap_Allocator *allocator, u64 capacity);
 void *heap_allocator_allocate(Heap_Allocator *allocator, u64 size_in_bytes, u64 alignment);
-void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_pointer, u64 new_size_in_bytes);
+void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_pointer, u64 new_size_in_bytes, u64 new_user_alignment);
 void heap_allocator_deallocate(Heap_Allocator *allocator, const void *pointer);
