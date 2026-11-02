@@ -15,11 +15,12 @@ Heap_Allocator create(const u64 capacity) {
 
 TEST(Heap_Allocator, Allocate) {
     Heap_Allocator allocator = create(64);
-    int *a = heap_allocator_allocate(&allocator, sizeof(int), 4);
+    int *a = heap_allocator_allocate(&allocator, sizeof(int));
     ASSERT_NE(a, null);
+    ASSERT_EQ(((int) a) % 16, 0);
     *a = 5;
-    const int *b = heap_allocator_allocate(&allocator, sizeof(int), 16);
+    const int *b = heap_allocator_allocate(&allocator, sizeof(int));
     ASSERT_NE(b, null);
     ASSERT_NE(a, b);
-    ASSERT_TRUE(((int) b % 8) == 0);
+    ASSERT_EQ(((int) b) % 16, 0);
 }

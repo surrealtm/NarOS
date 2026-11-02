@@ -39,7 +39,7 @@ int kernel_entry_point(const Boot_Info boot_info) {
     Heap_Allocator allocator;
     heap_allocator_create(&allocator, MEMORY_UNIT_Megabyte);
 
-    Boot_Info *allocated = heap_allocator_allocate(&allocator, sizeof(Boot_Info), STRUCT_ALIGNMENT(Boot_Info));
+    Boot_Info *allocated = heap_allocator_allocate(&allocator, sizeof(Boot_Info));
     os_output_print(str8("Allocated: %p\n"), allocated);
 
     terminal_run();

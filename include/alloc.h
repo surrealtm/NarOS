@@ -38,12 +38,12 @@ typedef struct Heap_Allocator {
 } Heap_Allocator;
 
 b8 heap_allocator_create(Heap_Allocator *allocator, u64 capacity);
-void *heap_allocator_allocate(Heap_Allocator *allocator, u64 size_in_bytes, u64 alignment);
-void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_pointer, u64 new_size_in_bytes, u64 alignment);
+void *heap_allocator_allocate(Heap_Allocator *allocator, u64 size_in_bytes);
+void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, u64 new_size_in_bytes);
 void heap_allocator_deallocate(Heap_Allocator *allocator, const void *pointer);
 
-#define AllocStruct(heap_allocator, type) heap_allocator_allocate(heap_allocator, sizeof(type), STRUCT_ALIGNMENT(type))
-#define AllocArray(heap_allocator, type, count) heap_allocator_allocate(heap_allocator, sizeof(type) * count, STRUCT_ALIGNMENT(type))
-#define ReallocArray(heap_allocator, pointer, type, count) heap_allocator_reallocate(heap_allocator, pointer, sizeof(type) * count, STRUCT_ALIGNMENT(type))
+#define AllocStruct(heap_allocator, type) heap_allocator_allocate(heap_allocator, sizeof(type))
+#define AllocArray(heap_allocator, type, count) heap_allocator_allocate(heap_allocator, sizeof(type) * count)
+#define ReallocArray(heap_allocator, pointer, type, count) heap_allocator_reallocate(heap_allocator, pointer, sizeof(type) * count)
 #define DeallocStruct(heap_allocator, pointer) heap_allocator_deallocate(heap_allocator, pointer)
 #define DeallocArray(heap_allocator, pointer) heap_allocator_deallocate(heap_allocator, pointer)

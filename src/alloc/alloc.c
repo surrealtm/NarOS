@@ -205,8 +205,7 @@ void heap_allocator_reset(Heap_Allocator *allocator) {
     clear_memory(allocator->bins, sizeof(allocator->bins));
 }
 
-void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_bytes, const u64 user_alignment) {
-    const u64 segment_alignment = max(HEAP_SEGMENT_ALIGNMENT, user_alignment);
+void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_bytes) {
     const u64 segment_size_in_bytes = align(user_size_in_bytes, STRUCT_ALIGNMENT(Heap_Segment));
 
     //
@@ -229,8 +228,10 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
                 // remains unchanged, but the latter half of the segment can be used for this user payload.
                 const u64 retained_size_in_bytes = free_segment->segment_size_in_bytes - segment_size_in_bytes - sizeof(Heap_Segment);
                 Heap_Segment *split = split_segment_at(free_segment, retained_size_in_bytes + sizeof(Heap_Segment));
+                remove_segment_from_free_list(allocator, free_segment);
                 update_segment_metadata(free_segment, retained_size_in_bytes, 0, false);
                 update_segment_metadata(split, segment_size_in_bytes, user_size_in_bytes, true);
+                insert_segment_into_free_list(allocator, free_segment); // The free segment might belong into a different bin now
                 void *user_pointer = user_pointer_from_segment(split);
                 clear_memory(user_pointer, user_size_in_bytes);
                 return user_pointer;
@@ -243,7 +244,7 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
     //
     // No free segment that could be re-used, append a new one at the end
     //
-    Heap_Segment *segment = stack_allocator_push(&allocator->stack, segment_size_in_bytes + sizeof(Heap_Segment), segment_alignment);
+    Heap_Segment *segment = stack_allocator_push(&allocator->stack, segment_size_in_bytes + sizeof(Heap_Segment), HEAP_SEGMENT_ALIGNMENT);
 
     if (segment != null) {
         update_segment_metadata(segment, segment_size_in_bytes, user_size_in_bytes, true);
@@ -252,7 +253,7 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
     return user_pointer_from_segment(segment);
 }
 
-void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_pointer, const u64 new_user_size_in_bytes, const u64 new_user_alignment) {
+void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, const u64 new_user_size_in_bytes) {
     if (new_user_size_in_bytes == 0) {
         heap_allocator_deallocate(allocator, old_pointer);
         return null;
@@ -281,19 +282,23 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, const void *old_point
         // copy the existing data.
         const u64 extension_size_in_bytes = new_segment_size_in_bytes - old_segment->segment_size_in_bytes;
         const void *extension = stack_allocator_push(&allocator->stack, extension_size_in_bytes, 1);
-        if (extension != null) update_segment_metadata(old_segment, old_segment->segment_size_in_bytes + extension_size_in_bytes, new_user_size_in_bytes, true);
-        return user_pointer_from_segment(old_segment);
+        if (extension != null) {
+            update_segment_metadata(old_segment, old_segment->segment_size_in_bytes + extension_size_in_bytes, new_user_size_in_bytes, true);
+            return user_pointer_from_segment(old_segment);
+        } else {
+            return null;
+        }
     } else {
         // The new size is larger than the previous, and we cannot abuse the layout of the heap allocator
         // in the arena, so we just have to allocate a new block, and then free the old one...
-        void *new_pointer = heap_allocator_allocate(allocator, new_user_size_in_bytes, new_user_alignment);
+        void *new_pointer = heap_allocator_allocate(allocator, new_user_size_in_bytes);
         if (new_pointer != null) {
             copy_memory(new_pointer, old_pointer, old_segment->user_size_in_bytes);
             heap_allocator_deallocate(allocator, old_pointer);
+            return new_pointer;
         } else {
-            new_pointer = old_pointer;
+            return null;
         }
-        return new_pointer;
     }
 }
 
