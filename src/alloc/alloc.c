@@ -16,8 +16,8 @@ static u8 *dynamic_memory_region_low = null, *dynamic_memory_region_high = null;
 static u8 *dynamic_memory_region_pointer = null;
 
 static
-void *reserve(const u64 capacity) {
-    const u32 starting_address = align((unsigned int) dynamic_memory_region_pointer, MEMORY_REGION_ALIGNMENT);
+void *reserve(const u32 capacity) {
+    const u32 starting_address = align((u32) dynamic_memory_region_pointer, MEMORY_REGION_ALIGNMENT);
     if (starting_address + capacity - 1 <= (u32) dynamic_memory_region_high) {
         dynamic_memory_region_pointer = (u8 *) (starting_address + capacity);
         return (void *) starting_address;
@@ -47,7 +47,7 @@ void alloc_initialize_memory_region(void *low, void *high) {
 // ---------------------------------------------------------------------------------------------------------------
 
 static
-void *stack_allocator_increase(Stack_Allocator *allocator, const u64 size_in_bytes) {
+void *stack_allocator_increase(Stack_Allocator *allocator, const u32 size_in_bytes) {
     if (allocator->occupied + size_in_bytes > allocator->capacity) {
         return null;
     }
@@ -58,7 +58,7 @@ void *stack_allocator_increase(Stack_Allocator *allocator, const u64 size_in_byt
 
 }
 
-b8 stack_allocator_create(Stack_Allocator *allocator, const u64 capacity) {
+b8 stack_allocator_create(Stack_Allocator *allocator, const u32 capacity) {
     allocator->base     = reserve(capacity);
     allocator->capacity = (allocator->base != null) ? capacity : 0;
     allocator->occupied = 0;
@@ -70,19 +70,19 @@ void stack_allocator_destroy(Stack_Allocator *allocator) {
     *allocator = (Stack_Allocator) { 0 };
 }
 
-void *stack_allocator_push(Stack_Allocator *allocator, const u64 size_in_bytes, const u64 alignment) {
+void *stack_allocator_push(Stack_Allocator *allocator, const u32 size_in_bytes, const u32 alignment) {
     stack_allocator_increase(allocator, align(allocator->occupied, alignment) - allocator->occupied);
     void *pointer = stack_allocator_increase(allocator, size_in_bytes);
     if (pointer != null) clear_memory(pointer, size_in_bytes);
     return pointer;
 }
 
-u64 stack_allocator_mark(const Stack_Allocator *allocator) {
+u32 stack_allocator_mark(const Stack_Allocator *allocator) {
     return allocator->occupied;
 }
 
-void stack_allocator_reset(Stack_Allocator *allocator, const u64 mark) {
-    allocator->occupied = clamp(mark, 0, allocator->capacity);
+void stack_allocator_reset(Stack_Allocator *allocator, const u32 mark) {
+    allocator->occupied = min(mark, allocator->capacity);
 }
 
 
@@ -99,7 +99,7 @@ typedef struct Heap_Segment {
     struct Heap_Segment *previous_segment; // Physical predecessor in the arena
 } ALIGN_DECLARATION(16) Heap_Segment;
 
-#define HEAP_SEGMENT_ALIGNMENT STRUCT_ALIGNMENT(Heap_Segment)
+#define HEAP_SEGMENT_ALIGNMENT 16 // Every heap segment shall be 16 byte aligned to reduce complexity when re-allocating or re-using segments
 
 static inline
 void *user_pointer_from_segment(const Heap_Segment *segment) {
@@ -112,8 +112,21 @@ Heap_Segment *segment_from_user_pointer(const void *pointer) {
 }
 
 static inline
-Heap_Segment *split_segment_at(const Heap_Segment *original, const u64 offset_in_bytes) {
+void update_segment_metadata(Heap_Segment *segment, const u32 segment_size_in_bytes, const b8 used) {
+    assert(segment_size_in_bytes < 0x80000000ULL, "The allocated heap segment is too large for the metadata.");
+    segment->segment_size_in_bytes = segment_size_in_bytes;
+    segment->used = used;
+}
+
+static inline
+Heap_Segment *split_segment_at(const Heap_Segment *original, const u32 offset_in_bytes) {
     return (Heap_Segment *) ((u8 *) original + offset_in_bytes);
+}
+
+static inline
+Heap_Segment *merge_segment_into(Heap_Segment *target, const Heap_Segment *source) {
+    update_segment_metadata(target, target->segment_size_in_bytes + source->segment_size_in_bytes + sizeof(Heap_Segment), target->used);
+    return target;
 }
 
 static inline
@@ -136,22 +149,15 @@ void update_successor_previous_segment(Heap_Allocator *allocator, Heap_Segment *
 }
 
 static inline
-void update_segment_metadata(Heap_Segment *segment, const u64 allocated_size_in_bytes, const b8 used) {
-    assert(allocated_size_in_bytes < 0x80000000ULL, "The allocated heap segment is too large for the metadata.");
-    segment->segment_size_in_bytes = allocated_size_in_bytes;
-    segment->used = used;
-}
-
-static inline
-s32 first_bin_index_for_size(const u64 segment_size_in_bytes) {
-    const u64 size_for_highest_bin = (1 << HEAP_ALLOCATOR_BINS) - 1;
-    const u64 aligned_size_in_bytes = segment_size_in_bytes >> 4;
+s32 first_bin_index_for_size(const u32 segment_size_in_bytes) {
+    const u32 size_for_highest_bin = (1 << HEAP_ALLOCATOR_BINS) - 1;
+    const u32 aligned_size_in_bytes = segment_size_in_bytes >> 4;
     return highest_bit_set(min(aligned_size_in_bytes, size_for_highest_bin));
 }
 
 static
-void remove_segment_from_free_list(Heap_Allocator *allocator, Heap_Segment *segment) {
-    const u64 bin_idx = first_bin_index_for_size(segment->segment_size_in_bytes);
+void remove_segment_from_free_list(Heap_Allocator *allocator, const Heap_Segment *segment) {
+    const u32 bin_idx = first_bin_index_for_size(segment->segment_size_in_bytes);
     if (segment->free_list_prev) segment->free_list_prev->free_list_next = segment->free_list_next;
     if (segment->free_list_next) segment->free_list_next->free_list_prev = segment->free_list_prev;
     if (allocator->bins[bin_idx] == segment) allocator->bins[bin_idx] = segment->free_list_next;
@@ -159,7 +165,7 @@ void remove_segment_from_free_list(Heap_Allocator *allocator, Heap_Segment *segm
 
 static
 void insert_segment_into_free_list(Heap_Allocator *allocator, Heap_Segment *segment) {
-    const u64 bin_idx = first_bin_index_for_size(segment->segment_size_in_bytes);
+    const u32 bin_idx = first_bin_index_for_size(segment->segment_size_in_bytes);
     if (allocator->bins[bin_idx]) allocator->bins[bin_idx]->free_list_prev = segment;
     segment->free_list_next = allocator->bins[bin_idx];
     segment->free_list_prev = null;
@@ -171,21 +177,20 @@ Heap_Segment *maybe_coalesce_free_segment(Heap_Allocator *allocator, Heap_Segmen
     Heap_Segment *next = next_heap_segment(allocator, segment);
     if (next != null && !next->used) {
         remove_segment_from_free_list(allocator, next);
-        update_segment_metadata(segment, segment->segment_size_in_bytes + sizeof(Heap_Segment) + next->segment_size_in_bytes, false);
+        merge_segment_into(segment, next);
     }
 
     Heap_Segment *previous = segment->previous_segment;
     if (previous != null && !previous->used) {
         remove_segment_from_free_list(allocator, previous);
-        update_segment_metadata(previous, previous->segment_size_in_bytes + sizeof(Heap_Segment) + segment->segment_size_in_bytes, false);
-        segment = previous;
+        segment = merge_segment_into(previous, segment);
     }
 
     update_successor_previous_segment(allocator, segment);
     return segment;
 }
 
-b8 heap_allocator_create(Heap_Allocator *allocator, const u64 capacity) {
+b8 heap_allocator_create(Heap_Allocator *allocator, const u32 capacity) {
     const b8 success = stack_allocator_create(&allocator->stack, capacity);
     allocator->last_segment = null;
     clear_memory(allocator->bins, sizeof(allocator->bins));
@@ -204,8 +209,8 @@ void heap_allocator_reset(Heap_Allocator *allocator) {
     clear_memory(allocator->bins, sizeof(allocator->bins));
 }
 
-void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_bytes) {
-    const u64 segment_size_in_bytes = align(user_size_in_bytes, STRUCT_ALIGNMENT(Heap_Segment));
+void *heap_allocator_allocate(Heap_Allocator *allocator, const u32 user_size_in_bytes) {
+    const u32 segment_size_in_bytes = align(user_size_in_bytes, HEAP_SEGMENT_ALIGNMENT);
 
     //
     // Try to find a segment in the free-list that can accomodate this allocation.
@@ -225,7 +230,7 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
             } else if (free_segment->segment_size_in_bytes >= segment_size_in_bytes) {
                 // The existing segment is large enough that splitting makes sense. Split this segment so that the free-list entry
                 // remains unchanged, but the latter half of the segment can be used for this user payload.
-                const u64 retained_size_in_bytes = free_segment->segment_size_in_bytes - segment_size_in_bytes - sizeof(Heap_Segment);
+                const u32 retained_size_in_bytes = free_segment->segment_size_in_bytes - segment_size_in_bytes - sizeof(Heap_Segment);
                 Heap_Segment *split = split_segment_at(free_segment, retained_size_in_bytes + sizeof(Heap_Segment));
                 remove_segment_from_free_list(allocator, free_segment);
                 update_segment_metadata(free_segment, retained_size_in_bytes, false);
@@ -256,14 +261,16 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u64 user_size_in_
     return user_pointer_from_segment(segment);
 }
 
-void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, const u64 new_user_size_in_bytes) {
+// @Incomplete: Zero-initialize the new memory
+void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, const u32 new_user_size_in_bytes) {
     if (new_user_size_in_bytes == 0) {
         heap_allocator_deallocate(allocator, old_pointer);
         return null;
     }
 
-    const u64 new_segment_size_in_bytes = align(new_user_size_in_bytes, STRUCT_ALIGNMENT(Heap_Segment));
+    const u32 new_segment_size_in_bytes = align(new_user_size_in_bytes, HEAP_SEGMENT_ALIGNMENT);
     Heap_Segment *old_segment = segment_from_user_pointer(old_pointer);
+    const Heap_Segment *next_segment = next_heap_segment(allocator, old_segment);
 
     if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes && old_segment->segment_size_in_bytes <= new_segment_size_in_bytes + sizeof(Heap_Segment)) {
         // The size didn't change significantly, so don't change anything about the underlying
@@ -273,18 +280,27 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, co
     } else if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes) {
         // The new size is smaller than the previous one, so split the existing block up.
         // This avoids having to copy the existing data.
-        const u64 split_size_in_bytes = old_segment->segment_size_in_bytes - new_segment_size_in_bytes - sizeof(Heap_Segment);
+        const u32 split_size_in_bytes = old_segment->segment_size_in_bytes - new_segment_size_in_bytes - sizeof(Heap_Segment);
         Heap_Segment *split = split_segment_at(old_segment, sizeof(Heap_Segment) + new_segment_size_in_bytes);
         update_segment_metadata(old_segment, new_segment_size_in_bytes, true);
         update_segment_metadata(split, split_size_in_bytes, false);
         split->previous_segment = old_segment;
         insert_segment_into_free_list(allocator, maybe_coalesce_free_segment(allocator, split));
         return user_pointer_from_segment(old_segment);
+    } else if (next_segment != null && !next_segment->used && old_segment->segment_size_in_bytes + next_segment->segment_size_in_bytes + sizeof(Heap_Segment) >= new_segment_size_in_bytes) {
+        // The next segment is free, so we can merge with this segment to increase the size of the current segment.
+        // This avoids having to copy the existing data.
+        // This currently takes the *entire* next_segment, even if the next_segment is way larger than what we actually
+        // need. At this moment, I don't care about that though.
+        remove_segment_from_free_list(allocator, next_segment);
+        merge_segment_into(old_segment, next_segment);
+        update_successor_previous_segment(allocator, old_segment);
+        return user_pointer_from_segment(old_segment);
     } else if (old_segment == allocator->last_segment) {
         // The new size is larger than the previous, but this block is the very last thing in the
         // arena. In that case, we can just push the arena to get more space without having to
         // copy the existing data.
-        const u64 extension_size_in_bytes = new_segment_size_in_bytes - old_segment->segment_size_in_bytes;
+        const u32 extension_size_in_bytes = new_segment_size_in_bytes - old_segment->segment_size_in_bytes;
         const void *extension = stack_allocator_push(&allocator->stack, extension_size_in_bytes, 1);
         if (extension != null) {
             update_segment_metadata(old_segment, old_segment->segment_size_in_bytes + extension_size_in_bytes, true);

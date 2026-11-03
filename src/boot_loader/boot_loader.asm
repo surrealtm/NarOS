@@ -105,6 +105,7 @@ determine_dynamic_memory_region:
     mov eax, [es:di + 0] ; Read base address
     mov [DYNAMIC_MEMORY_REGION_LOW],  eax
     add eax, [es:di + 8] ; Add length
+    dec eax ; Make the high pointer an inclusive range
     mov [DYNAMIC_MEMORY_REGION_HIGH], eax
     jmp .exit
 
