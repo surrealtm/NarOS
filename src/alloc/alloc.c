@@ -269,7 +269,6 @@ void *heap_allocator_allocate(Heap_Allocator *allocator, const u32 user_size_in_
     return user_pointer_from_segment(segment);
 }
 
-// @Incomplete: Zero-initialize the new memory
 void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, const u32 new_user_size_in_bytes) {
     if (new_user_size_in_bytes == 0) {
         heap_allocator_deallocate(allocator, old_pointer);
@@ -281,8 +280,8 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, co
 
     if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes && old_segment->segment_size_in_bytes <= new_segment_size_in_bytes + sizeof(Heap_Segment)) {
         // The size didn't change significantly, so don't change anything about the underlying
-        // block structure.
-        update_segment_metadata(old_segment, old_segment->segment_size_in_bytes, true);
+        // block structure. Clear the unused payload so later growth within this block sees zeros.
+        clear_memory((u8 *) old_pointer + new_user_size_in_bytes, old_segment->segment_size_in_bytes - new_user_size_in_bytes);
         return user_pointer_from_segment(old_segment);
     }
 
@@ -292,13 +291,14 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, co
         const u32 split_size_in_bytes = old_segment->segment_size_in_bytes - new_segment_size_in_bytes - sizeof(Heap_Segment);
         Heap_Segment *split = split_segment_at(old_segment, sizeof(Heap_Segment) + new_segment_size_in_bytes);
         update_segment_metadata(old_segment, new_segment_size_in_bytes, true);
+        clear_memory((u8 *) old_pointer + new_user_size_in_bytes, new_segment_size_in_bytes - new_user_size_in_bytes);
         update_segment_metadata(split, split_size_in_bytes, false);
         split->previous_segment = old_segment;
         insert_segment_into_free_list(allocator, maybe_coalesce_free_segment(allocator, split));
         return user_pointer_from_segment(old_segment);
     }
 
-    const Heap_Segment *next_segment = next_heap_segment(allocator, old_segment);
+    Heap_Segment *next_segment = next_heap_segment(allocator, old_segment);
     if (next_segment != null && !next_segment->used) {
         // The next segment is free, so we can merge with this segment to increase the size of the current segment.
         // This avoids having to copy the existing data.
@@ -307,6 +307,7 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, co
         remove_segment_from_free_list(allocator, next_segment);
         merge_segment_into(old_segment, next_segment);
         update_successor_previous_segment(allocator, old_segment);
+        clear_memory(next_segment, next_segment->segment_size_in_bytes + sizeof(Heap_Segment));
         if (old_segment->segment_size_in_bytes >= new_segment_size_in_bytes) {
             return user_pointer_from_segment(old_segment);
         }
@@ -317,6 +318,7 @@ void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, co
         // Re-use a different free segment that can accomodate the complete new segment and move the memory into there.
         void *new_pointer = user_pointer_from_segment(free_segment);
         copy_memory(new_pointer, old_pointer, old_segment->segment_size_in_bytes);
+        clear_memory((u8 *) new_pointer + old_segment->segment_size_in_bytes, free_segment->segment_size_in_bytes - old_segment->segment_size_in_bytes);
         heap_allocator_deallocate(allocator, old_pointer);
         return new_pointer;
     }

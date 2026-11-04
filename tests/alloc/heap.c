@@ -316,6 +316,8 @@ TEST(Heap_Allocator, ShrinkAtHeaderThresholdDoesNotSplit) {
     ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 32), first);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), null);
     for (u32 i = 0; i < 32; ++i) ASSERT_EQ(first[i], 0x5a);
+    ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 48), first);
+    for (u32 i = 32; i < 48; ++i) ASSERT_EQ(first[i], 0);
     for (u32 i = 0; i < 16; ++i) ASSERT_EQ(guard[i], 0xa5);
 }
 
@@ -331,7 +333,8 @@ TEST(Heap_Allocator, ReallocateWithinSameSegmentKeepsBlock) {
     ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 17), first);
     ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 32), first);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), null);
-    for (u32 i = 0; i < 32; ++i) ASSERT_EQ(first[i], 0x5a);
+    for (u32 i = 0; i < 17; ++i) ASSERT_EQ(first[i], 0x5a);
+    for (u32 i = 17; i < 32; ++i) ASSERT_EQ(first[i], 0);
     for (u32 i = 0; i < 16; ++i) ASSERT_EQ(guard[i], 0xa5);
 }
 
@@ -369,10 +372,12 @@ TEST(Heap_Allocator, GrowIntoFreeSuccessorExactFit) {
     ASSERT_NE(first, null);
     ASSERT_NE(last, null);
     set_memory(first, 0x5a, 16);
+    set_memory(last, 0xa5, 32);
     heap_allocator_deallocate(&allocator, last);
 
     ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 64), first);
     for (u32 i = 0; i < 16; ++i) ASSERT_EQ(first[i], 0x5a);
+    for (u32 i = 16; i < 64; ++i) ASSERT_EQ(first[i], 0);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), null);
 
     heap_allocator_deallocate(&allocator, first);
@@ -404,10 +409,12 @@ TEST(Heap_Allocator, GrowAcrossFreeTailAndUnusedArena) {
     ASSERT_NE(first, null);
     ASSERT_NE(last, null);
     set_memory(first, 0x5a, 16);
+    set_memory(last, 0xa5, 16);
     heap_allocator_deallocate(&allocator, last);
 
     ASSERT_EQ(heap_allocator_reallocate(&allocator, first, 64), first);
     for (u32 i = 0; i < 16; ++i) ASSERT_EQ(first[i], 0x5a);
+    for (u32 i = 16; i < 64; ++i) ASSERT_EQ(first[i], 0);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), null);
 
     heap_allocator_deallocate(&allocator, first);
@@ -422,6 +429,7 @@ TEST(Heap_Allocator, GrowTailToExactArenaCapacity) {
 
     ASSERT_EQ(heap_allocator_reallocate(&allocator, block, 48), block);
     for (u32 i = 0; i < 16; ++i) ASSERT_EQ(block[i], 0x5a);
+    for (u32 i = 16; i < 48; ++i) ASSERT_EQ(block[i], 0);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), null);
 }
 
@@ -435,6 +443,7 @@ TEST(Heap_Allocator, FullArenaMovesTailIntoEarlierFreeSegment) {
     ASSERT_NE(last, null);
     set_memory(guard, 0xa5, 16);
     set_memory(last, 0x5a, 16);
+    set_memory(first, 0xcc, 64);
     heap_allocator_deallocate(&allocator, first);
 
     u8 *grown = heap_allocator_reallocate(&allocator, last, 32);
@@ -444,6 +453,7 @@ TEST(Heap_Allocator, FullArenaMovesTailIntoEarlierFreeSegment) {
         ASSERT_EQ(grown[i], 0x5a);
         ASSERT_EQ(guard[i], 0xa5);
     }
+    for (u32 i = 16; i < 32; ++i) ASSERT_EQ(grown[i], 0);
 }
 
 TEST(Heap_Allocator, InsufficientSuccessorCanMoveToNewTail) {
@@ -484,6 +494,7 @@ TEST(Heap_Allocator, GrowNonTailByAppending) {
         ASSERT_EQ(grown[i], 0x5a);
         ASSERT_EQ(guard[i], 0xa5);
     }
+    for (u32 i = 16; i < 32; ++i) ASSERT_EQ(grown[i], 0);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 16), first);
 }
 
@@ -502,6 +513,8 @@ TEST(Heap_Allocator, InsufficientSuccessorMovesToDifferentFreeSegment) {
     set_memory(first, 0x5a, 16);
     set_memory(first_guard, 0x11, 16);
     set_memory(last_guard, 0x22, 16);
+    set_memory(larger, 0xcc, 64);
+    set_memory(small_neighbor, 0xa5, 16);
     heap_allocator_deallocate(&allocator, larger);
     heap_allocator_deallocate(&allocator, small_neighbor);
 
@@ -513,6 +526,7 @@ TEST(Heap_Allocator, InsufficientSuccessorMovesToDifferentFreeSegment) {
         ASSERT_EQ(first_guard[i], 0x11);
         ASSERT_EQ(last_guard[i], 0x22);
     }
+    for (u32 i = 16; i < 64; ++i) ASSERT_EQ(grown[i], 0);
     ASSERT_EQ(heap_allocator_allocate(&allocator, 48), first);
 }
 
