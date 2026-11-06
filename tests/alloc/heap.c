@@ -5,11 +5,12 @@
 #include <stdlib.h>
 
 static
-Heap_Allocator create(const u64 capacity) {
+Heap_Allocator create(const u64 heap_capacity) {
+    const u64 memory_region_size = heap_capacity + 16;
     Heap_Allocator allocator;
-    void *region = malloc(capacity);
-    alloc_initialize_memory_region(region, (u8 *) region + capacity - 1);
-    ASSERT_TRUE(heap_allocator_create(&allocator, capacity));
+    void *region = malloc(memory_region_size);
+    alloc_initialize_memory_region(region, (u8 *) region + memory_region_size - 1);
+    ASSERT_TRUE(heap_allocator_create(&allocator, heap_capacity));
     return allocator;
 }
 

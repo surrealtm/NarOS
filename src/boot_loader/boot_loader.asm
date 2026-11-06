@@ -75,13 +75,16 @@ initialize_vga:
 determine_dynamic_memory_region:
     ; Allocate stack space for the local memory map entry, which is a structure of 24 bytes
     sub esp, 24
+    xor ax, ax
+    mov es, ax
+    xor ebx, ebx
 
 .next_memory_map_entry:
     ; Prepare the interrupt
     mov eax, 0xe820
     mov edx, 0x534D4150
     mov ecx, 24
-    mov di, [esp + 0]
+    mov di, sp
     mov dword [es:di + 20], 1
     int 0x15
 

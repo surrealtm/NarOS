@@ -1,26 +1,60 @@
 #include "alloc.h"
 #include "alloc_kernel.h"
 
+// ---------------------------------------------------------------------------------------------------------------
+// Memory Region
+// ---------------------------------------------------------------------------------------------------------------
+
 #define MEMORY_REGION_ALIGNMENT 16
 
-/**
- * The boot loader gives us a memory region that is available on the system and designated for
- * dynamic memory allocation.
- * This region is bounded by the low and high value, any dynamic memory allocator must occupy a sub-region
- * between these two points.
- */
-static u8 *dynamic_memory_region_low = null, *dynamic_memory_region_high = null;
+typedef struct Memory_Region {
+    struct Memory_Region *next;
+    struct Memory_Region *previous;
+    u32 size_in_bytes;
+    b8 used;
+} ALIGN_DECLARATION(MEMORY_REGION_ALIGNMENT) Memory_Region;
 
-// @Temporary: We ought to have a list of used regions that can be freed again, instead of bumping this pointer.
-// Otherwise we will eventually run out of memory when reserving and then releasing dynamic memory blocks
-static u8 *dynamic_memory_region_pointer = null;
+STATIC_ASSERT(sizeof(Memory_Region) == MEMORY_REGION_ALIGNMENT);
+
+static Memory_Region *first_memory_region;
+
+static
+Memory_Region *memory_region_from_user_pointer(const void *user_pointer) {
+    return user_pointer != null ? (Memory_Region *) (((u8 *) user_pointer) - sizeof(Memory_Region)) : null;
+}
+
+static
+void *user_pointer_from_memory_region(const Memory_Region *region) {
+    return region != null ? ((u8 *) region) + sizeof(Memory_Region) : null;
+}
+
+static
+void maybe_coalesce_memory_region(Memory_Region *region) {
+    if (region->next && !region->next->used) {
+        region->size_in_bytes += region->next->size_in_bytes + sizeof(Memory_Region);
+        region->next = region->next->next;
+        if (region->next) region->next->previous = region;
+    }
+
+    if (region->previous && !region->previous->used) {
+        region->previous->size_in_bytes += region->size_in_bytes + sizeof(Memory_Region);
+        region->previous->next = region->next;
+        if (region->next) region->next->previous = region->previous;
+    }
+}
 
 static
 void *reserve(const u32 capacity) {
-    const u32 starting_address = align((u32) dynamic_memory_region_pointer, MEMORY_REGION_ALIGNMENT);
-    if (starting_address + capacity - 1 <= (u32) dynamic_memory_region_high) {
-        dynamic_memory_region_pointer = (u8 *) (starting_address + capacity);
-        return (void *) starting_address;
+    Memory_Region *region = first_memory_region;
+
+    while (region != null && (region->used || region->size_in_bytes < capacity)) {
+        region = region->next;
+    }
+
+    if (region) {
+        // @Incomplete: Maybe split the region if it is big enough?
+        region->used = true;
+        return user_pointer_from_memory_region(region);
     } else {
         return null;
     }
@@ -28,8 +62,11 @@ void *reserve(const u32 capacity) {
 
 static
 void release(const void *address) {
-    // @Incomplete: Support releasing memory regions
-    (void) address;
+    Memory_Region *region = memory_region_from_user_pointer(address);
+    if (region) {
+        region->used = false;
+        maybe_coalesce_memory_region(region);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -37,9 +74,15 @@ void release(const void *address) {
 // ---------------------------------------------------------------------------------------------------------------
 
 void alloc_initialize_memory_region(void *low, void *high) {
-    dynamic_memory_region_low     = low;
-    dynamic_memory_region_high    = high;
-    dynamic_memory_region_pointer = dynamic_memory_region_low;
+    const u32 aligned_low = align((u32) low, MEMORY_REGION_ALIGNMENT);
+    const u32 available_size_in_bytes = (u32) high - (u32) aligned_low + 1;
+    if (available_size_in_bytes < sizeof(Memory_Region)) return;
+
+    first_memory_region = (Memory_Region *) aligned_low;
+    first_memory_region->next = null;
+    first_memory_region->previous = null;
+    first_memory_region->size_in_bytes = available_size_in_bytes - sizeof(Memory_Region);
+    first_memory_region->used = false;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
