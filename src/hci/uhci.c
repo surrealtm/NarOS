@@ -405,7 +405,7 @@ void add_transfer_descriptors(UHCI_Controller *controller, const u8 device_idx, 
     const UHCI_Endpoint *endpoint = find_endpoint(controller, device_idx, endpoint_idx);
     const HCI_Direction direction = direction_for_packet_type(packet_type);
     const u16 maximum_packet_size = get_maximum_packet_size(endpoint, direction);
-    const u32 descriptor_count = align(size_in_bytes, maximum_packet_size);
+    const u32 descriptor_count = next_multiple(size_in_bytes, maximum_packet_size);
     for(u32 descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
         const u32 offset_in_bytes = descriptor_idx * maximum_packet_size;
         const u32 packet_size_in_bytes = min(size_in_bytes - offset_in_bytes, maximum_packet_size);

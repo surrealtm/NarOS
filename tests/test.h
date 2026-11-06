@@ -18,16 +18,24 @@
     } \
     static void test_##suite##_##name(void)
 
+#define ASSERT_TRUE(value) \
+        if (!(value)) { \
+            fail_current_test(__FILE__, __LINE__, #value " is not true"); \
+        }
+
+#define ASSERT_FALSE(value) \
+        if ((value)) { \
+            fail_current_test(__FILE__, __LINE__, #value " is not false"); \
+        }
+
 #define ASSERT_EQ(lhs, rhs) \
         if ((lhs) != (rhs)) { \
             fail_current_test(__FILE__, __LINE__, #lhs " is not equal to " #rhs); \
-            return; \
         }
 
 #define ASSERT_NE(lhs, rhs) \
         if ((lhs) == (rhs)) { \
             fail_current_test(__FILE__, __LINE__, #lhs " is equal to " #rhs); \
-            return; \
         }
 
 /* --------------------------------------------------------------------------------------------------------------- */

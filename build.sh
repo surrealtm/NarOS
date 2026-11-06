@@ -9,7 +9,7 @@ BUILD_START=$(date +%s%N)
 # ----------------------------------------------------------------------------------------------------------------
 INCLUDE_DIR=include/
 SOURCE_DIR=src/
-BUILD_DIR=build/
+BUILD_DIR=build/kernel/
 IMAGE_NAME=naros.bin
 RUN_QEMU=false
 DEBUG_QEMU=false
@@ -109,7 +109,8 @@ mkdir -p ${BUILD_DIR}
 # ----------------------------------------------------------------------------------------------------------------
 object_file_path() {
     local source="$1"
-    local name="${source//\//_}"
+    local name="${source}"
+    name="${name//\//_}"
     name="${name}.o"
     printf '%s%s\n' "${BUILD_DIR}" "${name}"
 }
@@ -156,6 +157,7 @@ echo " + Compiling the kernel with options: ${KERNEL_COMPILER_OPTIONS[@]}"
 
 KERNEL_C_SOURCE_FILES=(
     "acpi/acpi.c"
+    "alloc/alloc.c"
     "base/base.c"
     "block_device/block_device.c"
     "ctrl/ctrl.c"
@@ -258,7 +260,8 @@ fi
 # ----------------------------------------------------------------------------------------------------------------
 # Launch QEMU
 # ----------------------------------------------------------------------------------------------------------------
-QEMU_PARAMETERS="-drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PARAMETERS} -monitor stdio"
+QEMU_MEMORY_CAPACITY="16m"
+QEMU_PARAMETERS="-m ${QEMU_MEMORY_CAPACITY} -drive format=raw,file=${BUILD_DIR}${IMAGE_NAME} ${QEMU_USB_PARAMETERS} -monitor stdio"
 
 if [[ ${DEBUG_QEMU} == true ]]; then
     echo " + Launching QEMU debugging..."
