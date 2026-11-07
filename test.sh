@@ -92,6 +92,7 @@ TEST_COMPILER_OPTIONS=(
 )
 
 TEST_SOURCE_FILES=(
+    "alloc/region.c"
     "alloc/stack.c"
     "alloc/heap.c"
 )

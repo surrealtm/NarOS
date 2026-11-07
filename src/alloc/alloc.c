@@ -29,6 +29,19 @@ void *user_pointer_from_memory_region(const Memory_Region *region) {
 }
 
 static
+void split_memory_region(Memory_Region *region, const u32 retained_size_in_bytes) {
+    Memory_Region *split = (Memory_Region *) ((u8 *) user_pointer_from_memory_region(region) + retained_size_in_bytes);
+    split->next = region->next;
+    split->previous = region;
+    split->size_in_bytes = region->size_in_bytes - retained_size_in_bytes - sizeof(Memory_Region);
+    split->used = false;
+    if (split->next) split->next->previous = split;
+
+    region->next = split;
+    region->size_in_bytes = retained_size_in_bytes;
+}
+
+static
 void maybe_coalesce_memory_region(Memory_Region *region) {
     if (region->next && !region->next->used) {
         region->size_in_bytes += region->next->size_in_bytes + sizeof(Memory_Region);
@@ -40,32 +53,6 @@ void maybe_coalesce_memory_region(Memory_Region *region) {
         region->previous->size_in_bytes += region->size_in_bytes + sizeof(Memory_Region);
         region->previous->next = region->next;
         if (region->next) region->next->previous = region->previous;
-    }
-}
-
-static
-void *reserve(const u32 capacity) {
-    Memory_Region *region = first_memory_region;
-
-    while (region != null && (region->used || region->size_in_bytes < capacity)) {
-        region = region->next;
-    }
-
-    if (region) {
-        // @Incomplete: Maybe split the region if it is big enough?
-        region->used = true;
-        return user_pointer_from_memory_region(region);
-    } else {
-        return null;
-    }
-}
-
-static
-void release(const void *address) {
-    Memory_Region *region = memory_region_from_user_pointer(address);
-    if (region) {
-        region->used = false;
-        maybe_coalesce_memory_region(region);
     }
 }
 
@@ -85,6 +72,32 @@ void alloc_initialize_memory_region(void *low, void *high) {
     first_memory_region->used = false;
 }
 
+void *alloc_allocate_region(const u32 size_in_bytes) {
+    Memory_Region *region = first_memory_region;
+
+    while (region != null && (region->used || region->size_in_bytes < size_in_bytes)) {
+        region = region->next;
+    }
+
+    if (region) {
+        if (region->size_in_bytes >= size_in_bytes + sizeof(Memory_Region) + MEMORY_REGION_ALIGNMENT) {
+            split_memory_region(region, size_in_bytes);
+        }
+        region->used = true;
+        return user_pointer_from_memory_region(region);
+    } else {
+        return null;
+    }
+}
+
+void alloc_deallocate_region(const void *pointer) {
+    Memory_Region *region = memory_region_from_user_pointer(pointer);
+    if (region) {
+        region->used = false;
+        maybe_coalesce_memory_region(region);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Stack Allocator
 // ---------------------------------------------------------------------------------------------------------------
@@ -102,14 +115,14 @@ void *stack_allocator_increase(Stack_Allocator *allocator, const u32 size_in_byt
 }
 
 b8 stack_allocator_create(Stack_Allocator *allocator, const u32 capacity) {
-    allocator->base     = reserve(capacity);
+    allocator->base     = alloc_allocate_region(capacity);
     allocator->capacity = (allocator->base != null) ? capacity : 0;
     allocator->occupied = 0;
     return allocator->base != null;
 }
 
 void stack_allocator_destroy(Stack_Allocator *allocator) {
-    release(allocator->base);
+    alloc_deallocate_region(allocator->base);
     *allocator = (Stack_Allocator) { 0 };
 }
 
