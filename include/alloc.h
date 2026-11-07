@@ -1,0 +1,51 @@
+#pragma once
+
+#include "base.h"
+
+typedef enum Memory_Unit {
+    MEMORY_UNIT_Byte     = 1,
+    MEMORY_UNIT_Kilobyte = 1024 * MEMORY_UNIT_Byte,
+    MEMORY_UNIT_Megabyte = 1024 * MEMORY_UNIT_Kilobyte,
+    MEMORY_UNIT_Gigabyte = 1024 * MEMORY_UNIT_Megabyte,
+} Memory_Unit;
+
+// --------------------------------------------- Stack Allocator ------------------------------------------
+
+typedef struct Stack_Allocator {
+    void *base;
+    u32 capacity;
+    u32 occupied;
+} Stack_Allocator;
+
+b8 stack_allocator_create(Stack_Allocator *allocator, u32 capacity);
+void stack_allocator_destroy(Stack_Allocator *allocator);
+void *stack_allocator_push(Stack_Allocator *allocator, u32 size_in_bytes, u32 alignment);
+u32 stack_allocator_mark(const Stack_Allocator *allocator);
+void stack_allocator_reset(Stack_Allocator *allocator, u32 mark);
+
+#define PushStruct(stack_allocator, type) stack_allocator_push(stack_allocator, sizeof(type), STRUCT_ALIGNMENT(type))
+
+
+// ---------------------------------------------- Heap Allocator ----------------------------------------------
+
+#define HEAP_ALLOCATOR_BINS 16
+
+struct Heap_Segment;
+
+typedef struct Heap_Allocator {
+    Stack_Allocator stack;
+    struct Heap_Segment *last_segment; // Physical tail of the arena
+    struct Heap_Segment *bins[HEAP_ALLOCATOR_BINS];
+} Heap_Allocator;
+
+b8 heap_allocator_create(Heap_Allocator *allocator, u32 capacity);
+void heap_allocator_destroy(Heap_Allocator *allocator);
+void *heap_allocator_allocate(Heap_Allocator *allocator, u32 size_in_bytes);
+void *heap_allocator_reallocate(Heap_Allocator *allocator, void *old_pointer, u32 new_size_in_bytes);
+void heap_allocator_deallocate(Heap_Allocator *allocator, const void *pointer);
+
+#define AllocStruct(heap_allocator, type) heap_allocator_allocate(heap_allocator, sizeof(type))
+#define AllocArray(heap_allocator, type, count) heap_allocator_allocate(heap_allocator, sizeof(type) * count)
+#define ReallocArray(heap_allocator, pointer, type, count) heap_allocator_reallocate(heap_allocator, pointer, sizeof(type) * count)
+#define DeallocStruct(heap_allocator, pointer) heap_allocator_deallocate(heap_allocator, pointer)
+#define DeallocArray(heap_allocator, pointer) heap_allocator_deallocate(heap_allocator, pointer)

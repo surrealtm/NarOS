@@ -1,10 +1,13 @@
 #pragma once
 
+// @Cleanup: Get consistent of the capitalization of macros
+
 #define STATIC_ASSERT(expr) extern int (*__Static_assert_function (void)) [!!sizeof (struct { int static_assertion_failed: (expr) ? 2 : -1; })]
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 #define PACKED_STRUCT __attribute__((packed))
 #define ALIGN_DECLARATION(alignment) __attribute__((aligned(alignment)))
+#define STRUCT_ALIGNMENT(type) __alignof(type)
 
 #define LITTLE_ENDIAN 1
 #define BIG_ENDIAN (!LITTLE_ENDIAN)
@@ -23,10 +26,14 @@
 
 #define min(lhs, rhs) ((lhs) < (rhs) ? (lhs) : (rhs))
 #define max(lhs, rhs) ((lhs) > (rhs) ? (lhs) : (rhs))
+#define clamp(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
-#define align(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
+#define next_multiple(value, alignment) ((value) > 0 ? ((value) + (alignment) - 1) / (alignment) : 0)
+#define align(value, alignment) (next_multiple(value, alignment) * alignment)
 
 #define assert(condition, reason) if (!(condition)) panic(str8(reason))
+
+#define highest_bit_set(value) (31 - __builtin_clz(value))
 
 #if ENABLE_SANITY_CHECKS
 # define sanity_check(condition, reason) if (!(condition)) panic(str8(reason))

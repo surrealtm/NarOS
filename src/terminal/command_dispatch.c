@@ -262,7 +262,7 @@ s32 cmd_write(const Str8 device_identifier, const Str8 content) {
         return CMD_FAILURE;
     }
 
-    const s32 number_of_blocks = align(content.count, device->block_size_in_bytes);
+    const s32 number_of_blocks = next_multiple(content.count, device->block_size_in_bytes);
     char buffer[device->block_size_in_bytes];
     s32 block_idx = 0;
     for (s32 offset_in_content = 0; offset_in_content < content.count; ) {

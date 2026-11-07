@@ -158,12 +158,14 @@ s32 cstring_length_bounded(const char *string, const s32 max_size) {
     return count;
 }
 
-void memset(void *dst, const u8 value, const u32 size_in_bytes) {
+void *memset(void *dst, const int value, const unsigned int size_in_bytes) {
     set_memory(dst, value, size_in_bytes);
+    return dst;
 }
 
-void memcpy(void *dst, const void *src, const u32 size_in_bytes) {
+void *memcpy(void *dst, const void *src, const unsigned int size_in_bytes) {
     copy_memory(dst, src, size_in_bytes);
+    return dst;
 }
 
 static
