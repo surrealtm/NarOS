@@ -1,6 +1,6 @@
 #include "block_device.h"
 
-#define MAX_BLOCK_DEVICES 8
+#define MAX_BLOCK_DEVICES 2
 
 static
 b8 dummy_read(void *interface_impl, const u32 logical_block_address, void *destination) {
